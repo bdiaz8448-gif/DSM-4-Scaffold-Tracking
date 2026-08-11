@@ -173,6 +173,10 @@
   --shadow-md:0 6px 20px rgba(0,0,0,.55);
   --shadow-lg:0 20px 50px rgba(0,0,0,.60);
   --panel-shadow:0 14px 34px rgba(0,0,0,.50), 0 2px 6px rgba(0,0,0,.35);
+  /* Frosted translucency reads gray over a black canvas; MCC cards
+     are solid white, so the hybrid uses opaque fills. */
+  --panel-fill:#FFFFFF;
+  --panel-fill-2:#F6F5F2;
 }
 [data-theme="dark"] body{
   background:
@@ -913,7 +917,8 @@ html,body{overscroll-behavior-x:none;}
 .pin-wrap{animation:pinEnter .32s cubic-bezier(.2,.8,.3,1) backwards;}
 
 /* ---- Ask-about-this-scaffold search bar ---- */
-.ask-card{background:var(--grad-accent);border:none;color:white;}
+.card.ask-card, .ask-card{background:var(--grad-accent);border:none;color:white;
+  backdrop-filter:none;-webkit-backdrop-filter:none;}
 .ask-card h2{color:white;}
 .ask-sub{font-size:var(--fs-xs);color:rgba(255,255,255,.85);margin-bottom:12px;}
 .ask-row{display:flex;gap:var(--sp-2);}
@@ -1053,7 +1058,7 @@ html,body{overscroll-behavior-x:none;}
 .hero-cell.is-alert .hero-value{color:var(--st-alert-vivid);}
 
 /* --- Every large panel uses the panel recipe --- */
-.card, .info-card, .gc-approval-card, .inspection-box, .hist-details{
+.card:not(.ask-card), .info-card, .gc-approval-card, .inspection-box, .hist-details{
   background:linear-gradient(180deg, var(--panel-fill) 0%, var(--panel-fill-2) 100%);
   border:1px solid var(--panel-edge);
   box-shadow:var(--panel-shadow), var(--panel-inner);
