@@ -160,68 +160,19 @@
   --panel-inner:inset 0 1px 0 rgba(255,255,255,.95);
 }
 [data-theme="dark"]{
-  /* Strictly neutral greys. No blue. This is the fix. */
-  --bg:#0A0A0B; --card:#141416; --card-2:#1B1B1E;
-  --border:#2B2B2E; --border-strong:#3C3C40;
-  --ink:#F2F1EE; --ink-soft:#D6D4CF; --muted:#9C9A95;
-
-  --accent:#FF7A29; --accent-hover:#FF9147; --accent-soft:#2A1509; --accent-ink:#FFB27D;
-
-  --green:#3DD68C; --green-bg:#0D2B1F;
-  --gray:#9C9A95; --gray-bg:#1F1F22;
-  --red:#FF5A5A; --red-bg:rgba(255,77,77,.14);
-  --amber:#FFC53D; --amber-bg:#2E2205;
-  --cyan:#3DD6E8; --cyan-bg:#08282E;
-  --purple:#B79BFF; --purple-bg:#1E1730;
-
-  --hover:#1F1F22; --hover-ink:#F2F1EE;
-  --info:#AAB3C0; --info-bg:#1B1E23;
-  --label:#8B8880;
-
-  /* Dark theme runs the hues hotter -- on near-black a mid-tone reads muddy,
-     which is exactly what made the old maroon row wash look dirty. */
-  --st-wait:#FFC53D;   --st-wait-wash:rgba(255,197,61,.13);   --st-wait-vivid:#FFD05C;
-  --st-crew:#5B9BFF;   --st-crew-wash:rgba(91,155,255,.13);    --st-crew-vivid:#6BA8FF;
-  --st-live:#3DD68C;   --st-live-wash:rgba(61,214,140,.13);    --st-live-vivid:#4BE79B;
-  --st-mod:#FF9147;    --st-mod-wash:rgba(255,145,71,.15);     --st-mod-vivid:#FFA05C;
-  --st-down:#3DD6E8;   --st-down-wash:rgba(61,214,232,.12);    --st-down-vivid:#5AE3F2;
-  --st-closed:#9C9A95; --st-closed-wash:rgba(156,154,149,.09); --st-closed-vivid:#B4B1AB;
-  --st-alert:#FF4D4D;  --st-alert-wash:rgba(255,77,77,.15);    --st-alert-vivid:#FF5F5F;
-
-  /* ---- Glass primitives ----
-     Glassmorphism only works when the layer is genuinely translucent AND has
-     a bright top edge to read as a lit surface. Three ingredients every time:
-     a tinted fill, a hairline border lighter than the fill, and an inset
-     highlight along the top. Blur is applied sparingly -- it is the most
-     expensive part and large blurred areas hurt scroll performance. */
-  --glass-fill:rgba(255,255,255,.045);
-  --glass-fill-strong:rgba(255,255,255,.075);
-  --glass-edge:rgba(255,255,255,.14);
-  --glass-edge-bright:rgba(255,255,255,.30);
-  --glass-top:rgba(255,255,255,.16);
-  --glass-blur:14px;
-  /* Panel recipe. Translucent so the page shows through -- that is the whole
-     difference between frosted glass and a grey box. */
-  --panel-fill:rgba(255,255,255,.055);
-  --panel-fill-2:rgba(255,255,255,.032);
-  --panel-edge:rgba(255,255,255,.11);
-  --panel-edge-lit:rgba(255,255,255,.20);
-  --panel-shadow:0 18px 40px rgba(0,0,0,.42), 0 2px 8px rgba(0,0,0,.30);
-  --panel-inner:inset 0 1px 0 rgba(255,255,255,.16), inset 0 -1px 0 rgba(0,0,0,.20);
-  --bar-a:#FFFFFF; --bar-b:#C9C6C0; --bar-track:#1F1F22;
-
-  --navy:var(--ink); --navy2:var(--ink);
-  --blue:var(--accent); --blue-light:var(--hover);
-
-  --grad-primary:linear-gradient(135deg,#1E1E21 0%,#161618 55%,#0F0F11 100%);
-  --grad-active:linear-gradient(135deg,#FF8A3D 0%,#F2740F 100%);
-  --grad-accent:linear-gradient(135deg,#1D1D20 0%,#141416 100%);
-
-  --shadow-sm:0 1px 2px rgba(0,0,0,.45);
-  --shadow-md:0 4px 16px rgba(0,0,0,.55);
-  --shadow-lg:0 18px 48px rgba(0,0,0,.65);
-
-  --blueprint-line:rgba(255,255,255,.028);
+  /* MCC-BOARD HYBRID (BDiaz, Aug 2026). Dark mode is no longer a full
+     dark skin: the PAGE stays near-black -- "everything behind the
+     surrounding needs to be dark" -- while every card, tab and status
+     color falls through to the light values in :root. White cards
+     floating on a black canvas, exactly like the MC Constraint Board.
+     Only the canvas itself is overridden here. */
+  --bg:#0A0A0B;
+  --blueprint-line:rgba(255,255,255,.035);
+  /* Cards float on black, so shadows work harder than on paper. */
+  --shadow-sm:0 1px 3px rgba(0,0,0,.50);
+  --shadow-md:0 6px 20px rgba(0,0,0,.55);
+  --shadow-lg:0 20px 50px rgba(0,0,0,.60);
+  --panel-shadow:0 14px 34px rgba(0,0,0,.50), 0 2px 6px rgba(0,0,0,.35);
 }
 [data-theme="dark"] body{
   background:
@@ -673,16 +624,14 @@ tr.stage-live{background:transparent;}
 .notice{font-size:var(--fs-xs);padding:var(--sp-2) var(--sp-3);border-radius:var(--r-md);margin-bottom:10px;border-left:3px solid transparent;}
 .notice a{color:inherit;font-weight:var(--fw-medium);text-decoration:underline;text-underline-offset:2px;}
 .notice.crit a{color:#fff;}
-[data-theme="dark"] .notice a{color:#fff;}
 .bleed-next a{color:inherit;font-weight:var(--fw-medium);text-decoration:underline;text-underline-offset:2px;}
-[data-theme="dark"] .bleed-next a{color:#fff;}
 .notice.warn{background:var(--amber-bg);color:var(--amber);border-left-color:var(--amber);}
 .notice.info{background:var(--info-bg);color:var(--info);border-left-color:var(--info);}
 
 .contractor-line{display:flex;justify-content:space-between;align-items:center;padding:var(--sp-2) 0;border-bottom:1px dashed var(--border);font-size:var(--fs-xs);}
 .contractor-line:last-child{border-bottom:none;}
 
-.hist-details{border:1px solid var(--border);border-radius:var(--r-md);margin-top:12px;overflow:hidden;background:var(--bg);}
+.hist-details{border:1px solid var(--border);border-radius:var(--r-md);margin-top:12px;overflow:hidden;background:var(--card-2);}
 .hist-details summary{cursor:pointer;padding:var(--sp-3) var(--sp-3);font-weight:var(--fw-bold);font-size:var(--fs-sm);color:var(--ink);
   list-style:none;display:flex;align-items:center;justify-content:space-between;user-select:none;}
 .hist-details summary::-webkit-details-marker{display:none;}
@@ -727,7 +676,7 @@ tr.stage-live{background:transparent;}
 .dir-remove{color:var(--red);cursor:pointer;font-size:var(--fs-xs);font-weight:var(--fw-bold);background:none;border:none;}
 .contact-line{font-size:var(--fs-2xs);color:var(--muted);}
 
-.bldg-mgmt-row{border:1px solid var(--border);border-radius:var(--r-lg);padding:var(--sp-3) var(--sp-4);margin-bottom:10px;background:var(--bg);
+.bldg-mgmt-row{border:1px solid var(--border);border-radius:var(--r-lg);padding:var(--sp-3) var(--sp-4);margin-bottom:10px;background:var(--card-2);
   transition:box-shadow .15s ease,border-color .15s ease;}
 .bldg-mgmt-row:hover{box-shadow:0 2px 10px rgba(0,0,0,.06);border-color:var(--border-strong);}
 .bldg-mgmt-head{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-2);margin-bottom:9px;flex-wrap:wrap;}
@@ -872,7 +821,7 @@ html,body{overscroll-behavior-x:none;}
 }
 .cost-exposure-banner .label{font-size:var(--fs-2xs);font-weight:var(--fw-medium);text-transform:uppercase;letter-spacing:.03em;opacity:.9;}
 .cost-exposure-banner .value{font-size:var(--fs-xl);font-weight:var(--fw-bold);}
-.inspection-box{background:var(--bg);border:1px solid var(--border);border-radius:var(--r-md);padding:var(--sp-3) var(--sp-3);margin-top:10px;}
+.inspection-box{background:var(--card-2);border:1px solid var(--border);border-radius:var(--r-md);padding:var(--sp-3) var(--sp-3);margin-top:10px;}
 .inspection-check-row{display:flex;align-items:center;gap:var(--sp-2);font-size:var(--fs-xs);padding:var(--sp-1) 0;}
 .inspection-expired{color:var(--red);font-weight:var(--fw-bold);}
 @media print{
@@ -893,7 +842,7 @@ html,body{overscroll-behavior-x:none;}
 .cmdk-item{padding:var(--sp-3) var(--sp-4);font-size:var(--fs-sm);cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:var(--sp-2);}
 .cmdk-item:hover,.cmdk-item.active{background:var(--hover);}
 .cmdk-item .cmdk-sub{color:var(--muted);font-size:var(--fs-2xs);white-space:nowrap;}
-.cmdk-hint{padding:var(--sp-2) var(--sp-4);font-size:var(--fs-2xs);color:var(--muted);border-top:1px solid var(--border);background:var(--bg);}
+.cmdk-hint{padding:var(--sp-2) var(--sp-4);font-size:var(--fs-2xs);color:var(--muted);border-top:1px solid var(--border);background:var(--card-2);}
 .cmdk-empty{padding:var(--sp-4) var(--sp-4);font-size:var(--fs-xs);color:var(--muted);}
 
 .mic-btn{background:var(--gray-bg);border:1px solid var(--border);border-radius:var(--r-md);padding:var(--sp-1) var(--sp-2);cursor:pointer;
@@ -1030,8 +979,7 @@ html,body{overscroll-behavior-x:none;}
 /* --- Section titles: present but almost invisible --- */
 .info-card-title{display:flex;align-items:center;gap:var(--sp-2);margin:0 0 var(--sp-4);
   font-size:var(--fs-3xs);font-weight:var(--fw-medium);text-transform:uppercase;letter-spacing:.20em;
-  color:rgba(255,255,255,.58);}
-[data-theme="light"] .info-card-title{color:rgba(26,25,23,.48);}
+  color:rgba(26,25,23,.48);}
 /* Tiny glowing accent, then a hairline rule that fades out. */
 .info-card-title::before{content:'';width:5px;height:5px;border-radius:50%;flex:none;
   background:var(--accent);box-shadow:0 0 8px var(--accent);}
@@ -1293,7 +1241,6 @@ input, select, textarea{background:var(--card);color:var(--ink);}
    All CSS does here is set the dark-mode scheme so the native icon and the
    picker panel are legible against a dark field. */
 input[type="date"]{cursor:pointer;}
-[data-theme="dark"] input[type="date"]{color-scheme:dark;}
 
 /* --- Buttons: one glass recipe, tinted per intent ---
    Every button gets the same physical treatment -- lit top edge, ambient
@@ -1340,7 +1287,6 @@ input[type="date"]{cursor:pointer;}
 .wait-what{font-size:var(--fs-xs);color:var(--muted);margin-bottom:5px;}
 .wait-who{font-size:var(--fs-xs);color:var(--ink-soft);word-break:break-word;}
 .wait-who a{color:inherit;text-decoration:underline;text-underline-offset:2px;font-weight:var(--fw-medium);}
-[data-theme="dark"] .wait-who a{color:#fff;}
 .wait-who a:hover{text-decoration:underline;}
 .wait-party{display:inline-block;font-size:var(--fs-3xs);font-weight:var(--fw-bold);letter-spacing:.11em;
   padding:var(--sp-hair) var(--sp-2);border-radius:var(--r-lg);margin-right:6px;vertical-align:middle;
