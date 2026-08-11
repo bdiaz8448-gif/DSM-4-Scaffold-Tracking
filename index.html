@@ -9453,6 +9453,102 @@ init();
     $("naEmail").textContent = email;
   }
 
+
+  /* ---------------- PEOPLE & ACCESS (owner only) ----------------
+     Same flow as the MCC Constraint Board: the owner adds an email and
+     picks a role; the person opens the link, taps Create Account with
+     that same email and a password THEY choose. Nobody ever sees or
+     handles anyone else's password. The list IS sc_meta/gate -- the
+     document the security rules read -- so what this panel shows is
+     exactly what the database enforces. */
+  var _gateCache = null;
+  function gateSave(gd, then){
+    db.collection("sc_meta").doc("gate").set(gd).then(function(){
+      _gateCache = gd; renderGatePanel(); if(then) then();
+    }).catch(function(e){ alert("Could not save the access list: " + e.message); });
+  }
+  function gateAdd(){
+    var em = (document.getElementById("gaEmail").value || "").trim().toLowerCase();
+    var role = document.getElementById("gaRole").value;
+    if(!em || em.indexOf("@") < 1){ alert("Type a full email address first."); return; }
+    var gd = { owners: (_gateCache.owners||[]).slice(), allowed: (_gateCache.allowed||[]).slice() };
+    gd.owners = gd.owners.filter(function(x){ return x.toLowerCase() !== em; });
+    gd.allowed = gd.allowed.filter(function(x){ return x.toLowerCase() !== em; });
+    if(role === "owner") gd.owners.push(em); else gd.allowed.push(em);
+    gateSave(gd, function(){ document.getElementById("gaEmail").value = ""; });
+  }
+  function gateSetRole(em, role){
+    var gd = { owners: (_gateCache.owners||[]).slice(), allowed: (_gateCache.allowed||[]).slice() };
+    gd.owners = gd.owners.filter(function(x){ return x.toLowerCase() !== em; });
+    gd.allowed = gd.allowed.filter(function(x){ return x.toLowerCase() !== em; });
+    if(role === "owner") gd.owners.push(em); else gd.allowed.push(em);
+    if(!gd.owners.length){ alert("There must always be at least one owner."); renderGatePanel(); return; }
+    gateSave(gd);
+  }
+  function gateRemove(em){
+    var me = (auth.currentUser && auth.currentUser.email || "").toLowerCase();
+    if(em === me){ alert("You cannot remove yourself."); return; }
+    if(!confirm("Remove " + em + "? They will not be able to open the app at all.")) return;
+    var gd = { owners: (_gateCache.owners||[]).filter(function(x){ return x.toLowerCase() !== em; }),
+               allowed: (_gateCache.allowed||[]).filter(function(x){ return x.toLowerCase() !== em; }) };
+    if(!gd.owners.length){ alert("There must always be at least one owner."); return; }
+    gateSave(gd);
+  }
+  window.gateAdd = gateAdd; window.gateSetRole = gateSetRole; window.gateRemove = gateRemove;
+  function renderGatePanel(){
+    var hostView = document.getElementById("gcsub-owner");
+    if(!hostView || !isOwner) return;
+    var card = document.getElementById("gatePanelCard");
+    if(!card){
+      card = document.createElement("div");
+      card.className = "card"; card.id = "gatePanelCard";
+      hostView.insertBefore(card, hostView.firstChild);
+    }
+    if(!_gateCache){
+      db.collection("sc_meta").doc("gate").get().then(function(g){
+        _gateCache = g.exists ? g.data() : {owners: [], allowed: []};
+        renderGatePanel();
+      });
+      card.innerHTML = "<h2>People &amp; Access</h2><div class='notice info'>Loading the access list…</div>";
+      return;
+    }
+    var me = (auth.currentUser && auth.currentUser.email || "").toLowerCase();
+    function row(em, role){
+      var mine = em.toLowerCase() === me;
+      var sel = mine
+        ? "<span style='font-weight:800;color:var(--green,#2e9e6b);'>owner · you</span>"
+        : "<select onchange=\"gateSetRole('" + em + "', this.value)\">"
+          + "<option value='member'" + (role==="member" ? " selected" : "") + ">Member</option>"
+          + "<option value='owner'" + (role==="owner" ? " selected" : "") + ">Owner</option>"
+          + "</select>"
+          + " <button class='btn btn-outline btn-sm' onclick=\"gateRemove('" + em + "')\">Remove</button>";
+      return "<div style='display:flex;justify-content:space-between;align-items:center;gap:10px;"
+        + "padding:8px 0;border-bottom:1px solid rgba(128,128,128,.2);flex-wrap:wrap;'>"
+        + "<b style='overflow-wrap:anywhere;'>" + em + "</b><span>" + sel + "</span></div>";
+    }
+    var owners = (_gateCache.owners||[]).map(function(e){ return row(e, "owner"); }).join("");
+    var members = (_gateCache.allowed||[]).map(function(e){ return row(e, "member"); }).join("");
+    card.innerHTML = "<h2>People &amp; Access</h2>"
+      + "<p style='font-size:12.5px;color:var(--muted);line-height:1.55;'>"
+      + "Add someone by email and pick their role. Send them the board link; they tap "
+      + "<b>Create Account</b>, enter that same email and a password <i>they</i> choose — "
+      + "then they are in. You never see or handle their password. "
+      + "Anyone not on this list cannot open the app at all. "
+      + "<b>This list controls the door only</b> — what a person can <i>do</i> inside is still "
+      + "set by their PIN and role in the Directory.</p>"
+      + owners + members
+      + "<div style='display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;'>"
+      + "<input id='gaEmail' type='email' placeholder='name@company.com' style='flex:1;min-width:220px;'>"
+      + "<select id='gaRole'><option value='member'>Member — full app, no owner tools</option>"
+      + "<option value='owner'>Owner — can also manage this list</option></select>"
+      + "<button class='btn btn-primary' onclick='gateAdd()'>Add</button></div>";
+  }
+  /* Repaint our card every time the Owner panel repaints. */
+  if(typeof renderOwnerPanel === "function"){
+    var _rop = renderOwnerPanel;
+    renderOwnerPanel = function(){ _rop(); renderGatePanel(); };
+  }
+
   function boot(){
     if(typeof firebase === "undefined"){
       $("cgSub").innerHTML = "Could not load Firebase. Check the connection and reload.";
