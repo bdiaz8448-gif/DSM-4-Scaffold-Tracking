@@ -769,6 +769,18 @@ tr.stage-live{background:transparent;}
    scanned without reading across to the status. */
 .days-over{color:var(--red);font-weight:var(--fw-bold);font-variant-numeric:tabular-nums;}
 .cell-sub{font-size:var(--fs-3xs);color:var(--muted);margin-top:2px;}
+/* A sideways trackpad swipe was triggering Chrome's back/forward
+   gesture, and because every tab click writes a history entry, the page
+   appeared to pan left and right through tab history. This keeps the
+   back BUTTON working but stops the gesture hijack. */
+html,body{overscroll-behavior-x:none;}
+/* Ten rows at a time, everywhere a list can grow without bound. */
+.pager{display:flex;align-items:center;justify-content:center;gap:var(--sp-3);
+  padding:var(--sp-3) 0 0;flex-wrap:wrap;}
+.pager-info{font-size:var(--fs-xs);color:var(--muted);font-weight:var(--fw-medium);
+  font-variant-numeric:tabular-nums;}
+.pager select{background:var(--card);color:inherit;border:1px solid rgba(128,128,128,.4);
+  border-radius:var(--r-sm);padding:4px 8px;font-size:var(--fs-xs);cursor:pointer;}
 .tagdot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:middle;border:1px solid rgba(0,0,0,.15);}
 .tagdot.green{background:#1e7e34;} .tagdot.yellow{background:#e0a600;} .tagdot.red{background:#b3261e;}
 .admin-badge{display:inline-block;font-size:var(--fs-3xs);font-weight:var(--fw-medium);letter-spacing:.03em;color:var(--info);background:var(--info-bg);border-radius:var(--r-sm);padding:var(--sp-hair) var(--sp-1);margin-left:6px;vertical-align:middle;}
@@ -1641,6 +1653,7 @@ footer{text-align:center;color:#9aa3af;font-size:var(--fs-2xs);margin-top:30px;p
         <tbody id="allBody"></tbody>
       </table>
       </div>
+      <div id="allPager"></div>
     </div>
   </div>
 
@@ -1695,6 +1708,7 @@ footer{text-align:center;color:#9aa3af;font-size:var(--fs-2xs);margin-top:30px;p
             <tbody id="gcAllBody"></tbody>
           </table>
           </div>
+          <div id="gcBrowsePager"></div>
         </div>
       </div>
 
@@ -1887,6 +1901,7 @@ footer{text-align:center;color:#9aa3af;font-size:var(--fs-2xs);margin-top:30px;p
             <thead><tr><th>ID / Tag</th><th>Status</th><th>Building</th><th>Floor</th><th>Room / Area</th><th>Requestor</th><th></th></tr></thead>
             <tbody id="ownerDeleteBody"></tbody>
           </table>
+          <div id="ownerDeletePager"></div>
           </div>
         </div>
       </div>
@@ -1926,7 +1941,7 @@ footer{text-align:center;color:#9aa3af;font-size:var(--fs-2xs);margin-top:30px;p
     </div>
   </div>
 
-  <footer>Scaffold Command — Beta pilot on Building 537, DSM4 · Data stored locally in this browser for demo purposes</footer>
+  <footer>Scaffold Command — Beta pilot on Building 537, DSM4 · Live shared register · Confidential — Project Aura · <span id="buildMarker">build 2026-08-12a</span></footer>
 </div>
 
 <div class="modal-backdrop" id="modalBackdrop" onclick="if(event.target===this) closeModal()">
@@ -5065,13 +5080,13 @@ function renderDashboard(){
   if(overdue.length===0 && attn.length===0 && flags.length===0 && idleCount===0){
     html += '<div class="notice info">Nothing flagged right now — all standing scaffolds are within their expected duration and fully accounted for.</div>';
   } else {
-    overdue.forEach(r=>{
-      html += '<div class="notice crit">⚠ <b>'+(r.tag||r.id)+'</b> ('+r.floor+' — '+r.room+') is overdue — expected down by '+fmtDate(r.dueDate)+'. <a href="#" onclick="openDetail(\''+r.id+'\');return false;">View</a></div>';
-    });
-    attn.forEach(r=>{
+    html += pagedNotices('attnOverdue', overdue.map(r=>{
+      return '<div class="notice crit">⚠ <b>'+(r.tag||r.id)+'</b> ('+r.floor+' — '+r.room+') is overdue — expected down by '+fmtDate(r.dueDate)+'. <a href="#" onclick="openDetail(\''+r.id+'\');return false;">View</a></div>';
+    }), 'overdue');
+    html += pagedNotices('attnReady', attn.map(r=>{
       const active = activeContractors(r.usageLog).join(', ');
-      html += '<div class="notice warn">⚠ <b>'+(r.tag||r.id)+'</b> — requestor '+r.requestor.name+' marked Finished - Ready to Dismantle, but '+active+' still signed in as active. <a href="#" onclick="openDetail(\''+r.id+'\');return false;">View</a></div>';
-    });
+      return '<div class="notice warn">⚠ <b>'+(r.tag||r.id)+'</b> — requestor '+r.requestor.name+' marked Finished - Ready to Dismantle, but '+active+' still signed in as active. <a href="#" onclick="openDetail(\''+r.id+'\');return false;">View</a></div>';
+    }), 'flagged');
     // Anything blocked on a person for a week or more, with who to call --
     // this is the class of problem that used to be invisible because it sat
     // in no queue at all.
@@ -5081,42 +5096,39 @@ function renderDashboard(){
     if(idle.count){
       html += '<h3 style="margin-top:14px;">Idle — Standing But Unused'
         + (idle.accrued>0 ? ' · '+fmtMoney(idle.accrued)+' accrued' : '') + '</h3>';
-      idle.list.slice(0,6).forEach(function(x){
+      html += pagedNotices('attnIdle', idle.list.map(function(x){
         const r = x.rec, i = x.idle;
         const cls = i.kind==='unclaimed' ? 'crit' : 'warn';
         const who = i.kind==='unclaimed'
           ? 'no contractor signed in'
           : i.activeCount+' still signed in ('+i.activeNames.slice(0,2).join(', ')+')';
-        html += '<div class="notice '+cls+'"><b>'+(r.tag||r.id)+'</b> ('+r.floor+' — '+r.room+')'
+        return '<div class="notice '+cls+'"><b>'+(r.tag||r.id)+'</b> ('+r.floor+' — '+r.room+')'
           + ' — standing '+daysStanding(r)+' days, no activity for <b>'+i.daysQuiet+'</b>'
           + ' — '+who
           + (i.rate>0 ? ' · <b>'+fmtMoney(i.accrued)+'</b> since '+fmtDate(i.since) : '')
           + (i.alsoOverdue ? ' · already overdue' : '')
           + ' <a href="#" onclick="openDetail(\''+r.id+'\');return false;">View</a></div>';
-      });
-      if(idle.list.length > 6){
-        html += '<div class="notice info">'+(idle.list.length-6)+' more idle scaffold'
-          + (idle.list.length-6===1?'':'s')+' not shown.</div>';
-      }
+      }), 'idle');
+      
     }
     const stalled = waitingList(recs).filter(function(x){ return (x.w.days||0) >= 7; });
     if(stalled.length){
       html += '<h3 style="margin-top:14px;">⏳ Waiting On Someone</h3>';
-      stalled.slice(0,6).forEach(function(x){
+      html += pagedNotices('attnWaiting', stalled.map(function(x){
         const w = x.w, r = x.rec;
         const reach = [w.phone, w.email].filter(Boolean).join(' · ');
-        html += '<div class="notice warn"><b>'+(r.tag||r.id)+'</b> — '+w.what
+        return '<div class="notice warn"><b>'+(r.tag||r.id)+'</b> — '+w.what
           + ' — waiting <b>'+w.days+' days</b> on <b>'+w.who+'</b>'
           + (w.company && w.company!==w.who ? ' ('+w.company+')' : '')
           + (reach ? ' · '+reach : '')
           + ' <a href="#" onclick="openDetail(\''+r.id+'\');return false;">View</a></div>';
-      });
+      }), 'waiting');
     }
     if(flags.length){
       html += '<h3 style="margin-top:14px;">📊 Portfolio Patterns</h3>';
-      flags.forEach(f=>{
-        html += '<div class="notice warn">'+f.message+' <a href="#" onclick="openDetail(\''+f.ids[0]+'\');return false;">View first</a></div>';
-      });
+      html += pagedNotices('attnPatterns', flags.map(f=>{
+        return '<div class="notice warn">'+f.message+' <a href="#" onclick="openDetail(\''+f.ids[0]+'\');return false;">View first</a></div>';
+      }), 'patterns');
     }
   }
   attnCard.innerHTML = html;
@@ -6390,7 +6402,9 @@ function renderAll(){
   );
   // Oldest submission first everywhere in this list, so it's easy to see who asked first -- first come, first served.
   recs = recs.slice().sort((a,b)=> (a.dateRequested||'').localeCompare(b.dateRequested||''));
-  document.getElementById('allBody').innerHTML = recs.map(r=>{
+  const pgAll = pageSlice('allTable', recs);
+  document.getElementById('allPager').innerHTML = pagerHtml('allTable', pgAll, 'requests');
+  document.getElementById('allBody').innerHTML = pgAll.rows.map(r=>{
     const ds = daysStanding(r);
     const tagDot = r.tagColor ? '<span class="tagdot '+r.tagColor+'"></span>' : '';
     return '<tr class="reqrow '+rowStageClass(r)+'" onclick="openDetail(\''+r.id+'\')">'
@@ -6413,6 +6427,48 @@ function renderAll(){
 /* The sheet splits where-is-it into two columns: Sub Area (which sector of
    which floor) and Specific Work Location (the actual spot). Showing both,
    stacked, means the app reads the way the paper reads. */
+/* ---------------- LIST PAGINATION ----------------
+   Every unbounded list shows ten rows by default, with 25 and 50 on
+   offer. Page size is a personal viewing preference, so it lives in
+   THIS browser only -- it never enters the shared cloud config. */
+const PAGE_SIZES = [10, 25, 50];
+let _pagerSizes = {};
+try { _pagerSizes = JSON.parse(localStorage.getItem('scPagerSizes') || '{}') || {}; } catch(e){}
+const _pagerPage = {};
+function pageSlice(key, arr){
+  const size = PAGE_SIZES.indexOf(_pagerSizes[key]) >= 0 ? _pagerSizes[key] : 10;
+  const pages = Math.max(1, Math.ceil(arr.length / size));
+  const page = Math.min(_pagerPage[key] || 1, pages);
+  _pagerPage[key] = page;
+  return {rows: arr.slice((page - 1) * size, page * size),
+          start: (page - 1) * size, page: page, pages: pages,
+          size: size, total: arr.length};
+}
+function pagerHtml(key, p, noun){
+  if(p.total <= 10) return '';
+  const opts = PAGE_SIZES.map(n =>
+    '<option value="' + n + '"' + (p.size === n ? ' selected' : '') + '>' + n + ' per page</option>').join('');
+  return '<div class="pager">'
+    + '<button class="btn btn-outline btn-sm"' + (p.page <= 1 ? ' disabled' : '')
+    +   ' onclick="pagerGo(&quot;' + key + '&quot;,' + (p.page - 1) + ')">‹ Prev</button>'
+    + '<span class="pager-info">' + (p.start + 1) + '–' + Math.min(p.start + p.size, p.total)
+    +   ' of ' + p.total + ' ' + (noun || 'items') + '</span>'
+    + '<button class="btn btn-outline btn-sm"' + (p.page >= p.pages ? ' disabled' : '')
+    +   ' onclick="pagerGo(&quot;' + key + '&quot;,' + (p.page + 1) + ')">Next ›</button>'
+    + '<select onchange="pagerSize(&quot;' + key + '&quot;, this.value)" title="Rows per page">' + opts + '</select>'
+    + '</div>';
+}
+function pagedNotices(key, arr, noun){
+  const p = pageSlice(key, arr);
+  return p.rows.join('') + pagerHtml(key, p, noun);
+}
+function pagerGo(key, page){ _pagerPage[key] = page; renderCurrent(); }
+function pagerSize(key, val){
+  _pagerSizes[key] = parseInt(val, 10); _pagerPage[key] = 1;
+  try { localStorage.setItem('scPagerSizes', JSON.stringify(_pagerSizes)); } catch(e){}
+  renderCurrent();
+}
+
 function locationCellHtml(rec){
   const loc = rec.room || '—';
   return rec.subArea
@@ -6701,7 +6757,8 @@ function renderWaitingList(){
     host.innerHTML = '<div class="notice info">Nothing is blocked on anyone else right now.</div>';
     return;
   }
-  host.innerHTML = items.map(function(x){
+  const pgW = pageSlice('gcWaiting', items);
+  host.innerHTML = pgW.rows.map(function(x){
     const r = x.rec, w = x.w;
     const stale = w.days !== null && w.days >= 14;
     const od = isOverdueAny(r);
@@ -6726,7 +6783,7 @@ function renderWaitingList(){
           ? '<button class="btn btn-danger btn-sm" onclick="doOverrideDismantle(\''+r.id+'\')">Override</button>' : '')
       + '</div>'
       + '</div>';
-  }).join('');
+  }).join('') + pagerHtml('gcWaiting', pgW, 'blocked');
 }
 function renderGcView(){
   renderWaitingList();
@@ -6747,7 +6804,8 @@ function renderGcView(){
           : 'Nothing waiting on GC approval right now.')
       + '</div>';
   } else {
-    listEl.innerHTML = toggle + pending.map((r,i)=>{
+    const pgQ = pageSlice('gcApprovals', pending);
+    listEl.innerHTML = toggle + pgQ.rows.map((r,i)=>{
       // For a Modify Requested record, show the MODIFY request's own
       // requestor/discipline/purpose/notes (captured in pendingModify) --
       // not the original Build request's stale info.
@@ -6758,7 +6816,7 @@ function renderGcView(){
       const cardNotes = isModify ? r.pendingModify.notes : r.notes;
       const cardDate = isModify ? r.pendingModify.dateRequested : r.dateRequested;
       let html = '<div class="gc-approval-card">';
-      html += '<div><span class="queue-pos">#'+(i+1)+' in line</span><b>'+(r.tag||r.id)+'</b> — '+r.requestType+(r.lifecycleStatus==='Modify Requested'?' (Modify request)':'')+' — '+r.building+', '+r.floor+' — '+r.room+'</div>';
+      html += '<div><span class="queue-pos">#'+(pgQ.start+i+1)+' in line</span><b>'+(r.tag||r.id)+'</b> — '+r.requestType+(r.lifecycleStatus==='Modify Requested'?' (Modify request)':'')+' — '+r.building+', '+r.floor+' — '+r.room+'</div>';
       html += '<div style="font-size:12px;color:var(--muted);margin-top:3px;">Requested by '+cardRequestorName+(cardDiscipline?' ('+cardDiscipline+')':'')+' — '+(cardPurpose||'')+'</div>';
       if(cardNotes && cardNotes.trim()) html += '<div style="font-size:12px;color:var(--ink);margin-top:3px;background:var(--amber-bg);border:1px solid var(--amber);border-radius:6px;padding:6px 8px;"><b>Notes:</b> '+cardNotes.trim()+'</div>';
       html += '<div style="font-size:11.5px;color:var(--muted);margin-top:2px;">Submitted '+fmtDate(cardDate)
@@ -6775,7 +6833,7 @@ function renderGcView(){
       html += '<button class="btn btn-outline btn-sm" onclick="openDetail(\''+r.id+'\')">View Full Detail</button>';
       html += '</div></div>';
       return html;
-    }).join('');
+    }).join('') + pagerHtml('gcApprovals', pgQ, 'in queue');
   }
 
   const fBuilding = (document.getElementById('gcFltBuilding')||{}).value || '';
@@ -6802,7 +6860,9 @@ function renderGcView(){
     }
   }
   const showCost = moneyVisible();
-  document.getElementById('gcAllBody').innerHTML = recs.map(r=>{
+  const pgB = pageSlice('gcBrowse', recs);
+  document.getElementById('gcBrowsePager').innerHTML = pagerHtml('gcBrowse', pgB, 'scaffolds');
+  document.getElementById('gcAllBody').innerHTML = pgB.rows.map(r=>{
     const tagDot = r.tagColor ? '<span class="tagdot '+r.tagColor+'"></span>' : '';
     // Cost broken into the pieces people argue about separately: the
     // one-off erect price, rental charged so far, and how much of that
@@ -8141,7 +8201,9 @@ function renderOwnerPanel(){
       : '<option value="">No other GC personnel yet</option>';
   }
   const recs = state.records.slice().sort((a,b)=> (b.dateRequested||'').localeCompare(a.dateRequested||''));
-  document.getElementById('ownerDeleteBody').innerHTML = recs.map(r=>
+  const pgD = pageSlice('ownerDelete', recs);
+  document.getElementById('ownerDeletePager').innerHTML = pagerHtml('ownerDelete', pgD, 'requests');
+  document.getElementById('ownerDeleteBody').innerHTML = pgD.rows.map(r=>
     '<tr id="ownerDeleteRow_'+r.id+'"><td>'+(r.tag||r.id)+'</td><td>'+statusBadgeHtml(r)+'</td><td>'+r.building+'</td><td>'+r.floor+'</td><td>'+r.room+'</td><td>'+r.requestor.name+'</td>'
     + '<td><button class="btn btn-danger btn-sm" onclick="doDeleteRequestStartRow(\''+r.id+'\')">Delete</button></td></tr>'
   ).join('') || '<tr><td colspan="7"><div class="empty">No requests tracked yet.</div></td></tr>';
