@@ -936,6 +936,11 @@ html,body{overscroll-behavior-x:none;}
 .pin-gate input{width:100%;font-family:inherit;font-size:var(--fs-lg);letter-spacing:.3em;text-align:center;padding:var(--sp-3);
   border-radius:var(--r-md);border:1px solid var(--border);margin:var(--sp-3) 0;}
 .sub-tabs{display:flex;gap:var(--sp-1);flex-wrap:wrap;}
+/* The whole control row (sub-tabs + report button + signed-in text)
+   is one white bar, like the MCC board's pill rows. */
+#gcUnlocked > div:first-child, #foremanUnlocked > div:first-child{
+  background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);
+  padding:var(--sp-2) var(--sp-3);box-shadow:var(--shadow-sm);}
 .sub-tab-btn{background:none;border:none;font-family:inherit;font-size:var(--fs-xs);font-weight:var(--fw-bold);color:var(--muted);
   padding:var(--sp-2) var(--sp-3);border-radius:var(--r-md) var(--r-md) 0 0;cursor:pointer;border-bottom:2px solid transparent;}
 .sub-tab-btn:hover{background:var(--hover);color:var(--hover-ink);}
@@ -1097,12 +1102,16 @@ input, select, textarea{background:var(--card);color:var(--ink);}
 .aging-cell .lbl{font-size:var(--fs-3xs);text-transform:uppercase;letter-spacing:.09em;
   color:var(--muted);font-weight:var(--fw-medium);margin-top:var(--sp-1);}
 .aging-cell .amt{font-size:var(--fs-xs);color:var(--muted);margin-top:var(--sp-1);}
-.aging-cell.ok .n{color:var(--st-live-vivid);}
-.aging-cell.watch .n{color:var(--st-wait-vivid);}
-.aging-cell.bad{border-color:var(--st-down-vivid);}
-.aging-cell.bad .n{color:var(--st-down-vivid);}
-.aging-cell.crit{border-color:var(--st-alert-vivid);background:var(--st-alert-wash);}
-.aging-cell.crit .n{color:var(--st-alert-vivid);}
+/* BDiaz's aging ladder: green / green / yellow / orange / red -- the
+   number AND the tile edge carry the same color, MCC-card style. */
+.aging-cell.ok{border:2px solid var(--green);background:var(--green-bg);}
+.aging-cell.ok .n{color:var(--green);}
+.aging-cell.watch{border:2px solid #D9A406;background:rgba(217,164,6,.12);}
+.aging-cell.watch .n{color:#B08300;}
+.aging-cell.bad{border:2px solid var(--accent);background:var(--accent-soft);}
+.aging-cell.bad .n{color:var(--accent);}
+.aging-cell.crit{border:2px solid var(--red);background:var(--red-bg);}
+.aging-cell.crit .n{color:var(--red);}
 .aging-cell.empty{opacity:.45;}
 .aging-note{font-size:var(--fs-xs);color:var(--muted);margin-top:var(--sp-3);}
 
