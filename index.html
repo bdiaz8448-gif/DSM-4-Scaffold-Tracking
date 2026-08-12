@@ -1687,6 +1687,10 @@ footer{text-align:center;color:#9aa3af;font-size:var(--fs-2xs);margin-top:30px;p
       </div>
 
       <div id="gcsub-analytics" class="gcsubview">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+          <label style="font-size:var(--fs-2xs);font-weight:var(--fw-medium);text-transform:uppercase;letter-spacing:.08em;color:var(--muted);">Building</label>
+          <select id="anBldgSel" onchange="setAnBldg(this.value)" style="font-family:inherit;font-size:var(--fs-sm);padding:var(--sp-2) var(--sp-3);border-radius:var(--r-md);border:1px solid var(--border);background:var(--card);color:var(--ink);"></select>
+        </div>
         <div class="kpi-grid" id="anKpi" style="grid-template-columns:repeat(4,1fr);"></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
           <div class="card"><h2>Most Scaffolds Requested — by Contractor</h2><div id="anByRequestor"></div>
@@ -3915,10 +3919,10 @@ function bleedBreakdown(recs){
           soonest:soonest.slice(0,4), policy:rentalPolicySpread(recs),
           standing:M.standing};
 }
-function renderBleed(){
+function renderBleed(recs){
   const el = document.getElementById('anBleedCard');
   if(!el) return;
-  const b = bleedBreakdown();
+  const b = bleedBreakdown(recs);
   if(!b.standing){ el.style.display='none'; return; }
   el.style.display='';
   let h = '<h2>Money Bleeding Right Now</h2>'
@@ -6906,8 +6910,21 @@ function renderGcView(){
 }
 
 /* ---------------- ANALYTICS TAB ---------------- */
+/* Analytics building filter (BDiaz): Entire Site, or any one building.
+   Every figure on the Analytics page reads through this one filter so
+   the numbers can never disagree with each other. Not persisted -- the
+   page opens on Entire Site. */
+let anBldg = 'ALL';
+function setAnBldg(v){ anBldg = v; renderAnalytics(); }
+window.setAnBldg = setAnBldg;
 function renderAnalytics(){
-  const recs = state.records;
+  const sel = document.getElementById('anBldgSel');
+  if(sel){
+    const opts = [['ALL','Entire Site']].concat(state.buildings.map(b=>[b,b]));
+    if(anBldg!=='ALL' && !state.buildings.includes(anBldg)) anBldg='ALL';
+    sel.innerHTML = opts.map(([v,l])=>'<option value="'+v+'"'+(v===anBldg?' selected':'')+'>'+l+'</option>').join('');
+  }
+  const recs = anBldg==='ALL' ? state.records : state.records.filter(r=>r.building===anBldg);
   const dismantled = recs.filter(r=>r.lifecycleStatus==='Dismantled');
   const overdueEver = recs.filter(r=>r.dueDate).length;
   // Only average records that actually have both a build date and a
@@ -6951,17 +6968,17 @@ function renderAnalytics(){
   }
   document.getElementById('anByRequestor').innerHTML = barList(tally(r=>r.requestor.name), true);
   document.getElementById('anByBuilder').innerHTML = barList(tally(r=>r.builderCompany));
-  document.getElementById('anByFloor').innerHTML = barList(state.buildings.map(b=>[b, recs.filter(r=>r.building===b).length]).concat(
-    SEED.floors.map(f=>['— '+f, recs.filter(r=>r.building==='DSM4' && r.floor===f).length])
-  ));
+  document.getElementById('anByFloor').innerHTML = anBldg==='ALL'
+    ? barList(state.buildings.map(b=>[b, recs.filter(r=>r.building===b).length]))
+    : barList(((state.buildingFloors||{})[anBldg]||[]).map(f=>[f, recs.filter(r=>r.floor===f).length]));
   if(moneyVisible()){
     const totalSpend = recs.reduce((sum,r)=> sum + (totalCost(r)||0), 0);
     const byBuilder = {};
     recs.forEach(r=>{ if(!r.builderCompany) return; byBuilder[r.builderCompany] = (byBuilder[r.builderCompany]||0) + (totalCost(r)||0); });
-    renderBleed();
+    renderBleed(recs);
     document.getElementById('anCostCard').style.display = '';
     document.getElementById('anCostSummary').innerHTML =
-      '<div class="bar-row"><div class="lbl">Total Est. Cost (all scaffolds)</div><div class="bar-track"><div class="bar-fill top" style="width:100%"></div></div><div class="bar-count" style="width:auto;">'+fmtMoney(totalSpend)+'</div></div>'
+      '<div class="bar-row"><div class="lbl">Total Est. Cost ('+(anBldg==='ALL'?'entire site':anBldg)+')</div><div class="bar-track"><div class="bar-fill top" style="width:100%"></div></div><div class="bar-count" style="width:auto;">'+fmtMoney(totalSpend)+'</div></div>'
       + Object.entries(byBuilder).sort((a,b)=>b[1]-a[1]).map(([name,amt])=>
         '<div class="bar-row"><div class="lbl">'+name+'</div><div class="bar-track"><div class="bar-fill" style="width:'+(totalSpend?Math.min(100,amt/totalSpend*100):0)+'%"></div></div><div class="bar-count" style="width:auto;">'+fmtMoney(amt)+'</div></div>'
       ).join('');
