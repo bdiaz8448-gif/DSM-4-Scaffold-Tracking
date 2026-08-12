@@ -706,12 +706,23 @@ tr.stage-live{background:transparent;}
   pointer-events:none;max-width:140px;overflow:hidden;text-overflow:ellipsis;z-index:10;}
 /* An overdue scaffold's company name goes red and breathes -- slow enough to
    notice while scanning, not fast enough to nag while you work. */
-/* Overdue label stays neutral (BDiaz: the flashing tabs were nauseating).
-   A steady red ring around the perimeter marks it; only the pin dot
-   below keeps pulsing. */
-.pin-label.is-overdue{
-  border:1.5px solid #FF3B49;
-  box-shadow:0 0 0 1px rgba(255,59,73,.30), 0 0 8px rgba(255,45,60,.40);}
+/* Overdue label: solid red tab (no opacity flashing -- that was
+   nauseating) with a small red-white light TRAVELING around the
+   perimeter, like the MCC board cards. The pin dot keeps its pulse. */
+.pin-label.is-overdue{color:#fff;
+  background:linear-gradient(145deg,#C4202E,#8E141E);
+  border-color:rgba(255,120,120,.55);
+  box-shadow:0 0 10px rgba(255,45,60,.45);}
+@property --sweep{syntax:'<angle>';initial-value:0deg;inherits:false;}
+.pin-label.is-overdue::after{content:'';position:absolute;inset:0;border-radius:inherit;
+  padding:var(--sp-hair);pointer-events:none;
+  background:conic-gradient(from var(--sweep),
+    transparent 0deg, transparent 295deg,
+    rgba(255,107,114,.55) 320deg, #FFD9DB 342deg, #FF6B72 356deg, transparent 360deg);
+  -webkit-mask:linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite:xor;mask-composite:exclude;
+  animation:ringSweep 2.4s linear infinite;}
+@keyframes ringSweep{to{--sweep:360deg;}}
 /* Two lines on the pin: who owns the work, then the tag number stencilled
    on the scaffold itself. The tag is the one a foreman reads off in the
    bay, so it gets its own line rather than being crammed in beside the
