@@ -1550,6 +1550,7 @@ footer{text-align:center;color:#9aa3af;font-size:var(--fs-2xs);margin-top:30px;p
   </div>
 
   <div id="view-dashboard" class="view">
+    <div class="building-tabs" id="dashBldgTabs"></div>
     <div class="cost-exposure-banner alert-glass" id="costExposureBanner" style="display:none;"></div>
     <div class="card ask-card">
       <h2>🔎 Ask About Your Scaffolds</h2>
@@ -1565,7 +1566,7 @@ footer{text-align:center;color:#9aa3af;font-size:var(--fs-2xs);margin-top:30px;p
     <div class="card" id="attnCard"></div>
     <div style="display:grid;grid-template-columns:1.15fr .85fr;gap:16px;">
       <div class="card">
-        <h2>Scaffolds by Building (currently standing)</h2>
+        <h2 id="dashChartTitle">Scaffolds by Building (currently standing)</h2>
         <div id="floorBarChart"></div>
       </div>
       <div class="card">
@@ -5011,8 +5012,36 @@ function goToAgeBucket(key){
   renderAll();
 }
 
+/* Dashboard building scope (BDiaz). Entire Site is first and is where the
+   page opens; DSM4 and DSM3 are pinned next because that is where the work
+   is, then the rest by scaffold count. Every figure below -- banner, KPIs,
+   aging strip, Needs Attention, charts -- reads the same scoped list, so
+   nothing on the page can disagree with the tab you are standing on. */
+let dashBldg = 'ALL';
+function setDashBldg(b){ dashBldg = b; renderDashboard(); }
+window.setDashBldg = setDashBldg;
+function dashBuildingOrder(){
+  const counts = {};
+  state.records.forEach(function(r){ if(r.building) counts[r.building] = (counts[r.building]||0)+1; });
+  const pinned = ['DSM4','DSM3'].filter(function(b){ return counts[b]; });
+  const rest = Object.keys(counts).filter(function(b){ return pinned.indexOf(b) < 0; })
+    .sort(function(a,b){ return counts[b]-counts[a] || a.localeCompare(b); });
+  return {order: pinned.concat(rest), counts: counts};
+}
 function renderDashboard(){
-  const recs = state.records;
+  const bo = dashBuildingOrder();
+  if(dashBldg !== 'ALL' && !bo.counts[dashBldg]) dashBldg = 'ALL';
+  const tabsEl = document.getElementById('dashBldgTabs');
+  if(tabsEl){
+    tabsEl.innerHTML = '<button class="building-tab'+(dashBldg==='ALL'?' active':'')
+      + '" onclick="setDashBldg(&quot;ALL&quot;)">Entire Site <span style="opacity:.7;">('+state.records.length+')</span></button>'
+      + bo.order.map(function(b){
+          return '<button class="building-tab'+(dashBldg===b?' active':'')
+            + '" onclick="setDashBldg(&quot;'+b+'&quot;)">'+b+' <span style="opacity:.7;">('+bo.counts[b]+')</span></button>';
+        }).join('');
+  }
+  const scopeName = dashBldg === 'ALL' ? 'Entire Site' : dashBldg;
+  const recs = dashBldg === 'ALL' ? state.records : state.records.filter(function(r){ return r.building === dashBldg; });
   const standing = recs.filter(isStanding);
   const pending = recs.filter(r=>r.lifecycleStatus==='Pending GC Approval' || r.lifecycleStatus==='Modify Requested');
   const ready = recs.filter(r=>r.lifecycleStatus==='Ready to Dismantle - Awaiting Requestor Approval');
@@ -5028,7 +5057,8 @@ function renderDashboard(){
   const exposure = M.overdue;
   if(M.overdueN > 0){
     exposureBanner.style.display = '';
-    exposureBanner.innerHTML = '<div><div class="label">💸 Overdue — '+M.overdueN+' scaffold'+(M.overdueN===1?'':'s')+' past due date'+(M.lateButFree?' · '+M.lateButFree+' still inside the free period':'')+'</div><div class="value">'+fmtMoney(exposure)+'</div></div>'
+    exposureBanner.innerHTML = '<div><div class="label">💸 '+scopeName+' — '+M.overdueN+' scaffold'+(M.overdueN===1?'':'s')+' past due date'+(M.lateButFree?' · '+M.lateButFree+' still inside the free period':'')+'</div><div class="value">'+fmtMoney(exposure)+'</div>'
+      + '<div class="label" style="opacity:.92;">paying rent on '+M.overdueN+' overdue scaffold'+(M.overdueN===1?'':'s')+' · '+fmtMoney(M.burn)+'/day</div></div>'
       + '<button class="btn btn-outline btn-sm" style="background:rgba(255,255,255,.15);color:white;border-color:rgba(255,255,255,.4);" onclick="goToAllFiltered(\'overdue\')">View Overdue</button>';
   } else {
     exposureBanner.style.display = 'none';
@@ -5049,7 +5079,7 @@ function renderDashboard(){
   renderAging(recs);
   const attnCard = document.getElementById('attnCard');
   const attn = recs.filter(needsAttention);
-  const flags = smartFlags();
+  const flags = dashBldg === 'ALL' ? smartFlags() : [];   // patterns are a portfolio-wide read
   let html = '<h2>Needs Attention</h2>';
   // idleCount participates in the empty check -- otherwise a portfolio whose
   // only problem is idle scaffolds reports "nothing flagged" and hides the
@@ -5111,8 +5141,15 @@ function renderDashboard(){
   }
   attnCard.innerHTML = html;
 
-  const byBuilding = state.buildings.map(b=>({label:b, count: standing.filter(r=>r.building===b).length}));
+  /* Site view lists the buildings; inside one building it drops to floors. */
+  const byBuilding = dashBldg === 'ALL'
+    ? state.buildings.map(b=>({label:b, count: standing.filter(r=>r.building===b).length}))
+    : ((state.buildingFloors||{})[dashBldg]||[]).map(f=>({label:f, count: standing.filter(r=>r.floor===f).length}));
   const maxB = Math.max(1, ...byBuilding.map(f=>f.count));
+  const ct = document.getElementById('dashChartTitle');
+  if(ct) ct.textContent = dashBldg === 'ALL'
+    ? 'Scaffolds by Building (currently standing)'
+    : dashBldg + ' by Floor (currently standing)';
   document.getElementById('floorBarChart').innerHTML = byBuilding.map(f=>
     '<div class="bar-row"><div class="lbl">'+f.label+'</div><div class="bar-track"><div class="bar-fill" style="width:'+(f.count/maxB*100)+'%"></div></div><div class="bar-count">'+f.count+'</div></div>'
   ).join('');
