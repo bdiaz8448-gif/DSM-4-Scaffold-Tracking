@@ -760,6 +760,28 @@ html,body{overscroll-behavior-x:none;}
   z-index:100;cursor:zoom-out;}
 .photo-lightbox img{max-width:92vw;max-height:92vh;border-radius:var(--r-md);}
 .building-tabs{display:flex;gap:var(--sp-1);flex-wrap:wrap;margin-bottom:10px;}
+
+/* Collapsible Needs Attention sections (BDiaz). Every section stays on the
+   page with its count and its money in the summary bar, so nothing is
+   hidden -- the rows are what fold away. Open/closed is remembered per
+   section, so a page someone works from every morning opens the way they
+   left it. */
+.attn-sec{border:1px solid var(--border);border-radius:var(--r-md);margin-bottom:var(--sp-2);
+  background:var(--card-2);overflow:hidden;}
+.attn-sec > summary{list-style:none;cursor:pointer;padding:var(--sp-2) var(--sp-3);
+  display:flex;align-items:center;gap:var(--sp-2);font-size:var(--fs-sm);
+  font-weight:var(--fw-bold);color:var(--ink);user-select:none;}
+.attn-sec > summary::-webkit-details-marker{display:none;}
+.attn-sec > summary:hover{background:var(--hover);}
+.attn-sec > summary::before{content:'▸';font-size:var(--fs-xs);color:var(--muted);
+  transition:transform .15s;display:inline-block;}
+.attn-sec[open] > summary::before{transform:rotate(90deg);}
+.attn-sec .attn-count{font-weight:var(--fw-bold);}
+.attn-sec .attn-money{margin-left:auto;font-weight:var(--fw-bold);font-variant-numeric:tabular-nums;}
+.attn-sec .attn-body{padding:0 var(--sp-3) var(--sp-3);}
+.attn-sec.sec-crit{border-color:var(--red);}
+.attn-sec.sec-crit > summary{color:var(--red);}
+.attn-sec.sec-warn > summary{color:var(--amber);}
 .building-tab{font-size:var(--fs-xs);font-weight:var(--fw-bold);padding:var(--sp-2) var(--sp-3);border-radius:var(--r-lg);border:2px solid var(--border);
   background:var(--card);color:var(--ink);cursor:pointer;transition:all .15s;}
 .building-tab.active{background:var(--grad-active);color:#fff;border-color:transparent;
@@ -1564,16 +1586,9 @@ footer{text-align:center;color:#9aa3af;font-size:var(--fs-2xs);margin-top:30px;p
     <div class="kpi-grid" id="kpiGrid"></div>
     <div class="card aging-card" id="agingCard" style="display:none;"></div>
     <div class="card" id="attnCard"></div>
-    <div style="display:grid;grid-template-columns:1.15fr .85fr;gap:16px;">
-      <div class="card">
-        <h2 id="dashChartTitle">Scaffolds by Building (currently standing)</h2>
-        <div id="floorBarChart"></div>
-      </div>
-      <div class="card">
-        <h2>Recent Activity</h2>
-        <div id="recentActivity"></div>
-      </div>
-    </div>
+    <!-- The by-building chart moved into the building tabs above (each tab
+         carries its own count), and Recent Activity moved to GC > Analytics
+         where it scopes to the building filter. Both were redundant here. -->
   </div>
 
   <div id="view-request" class="view">
@@ -1711,6 +1726,9 @@ footer{text-align:center;color:#9aa3af;font-size:var(--fs-2xs);margin-top:30px;p
           <p style="font-size:11.5px;color:var(--muted);margin-top:-6px;">Same idea, by trade — which disciplines tend to run long across every building.</p>
           <table class="scorecard-table"><thead><tr><th>Discipline</th><th>Closed Out</th><th>On-Time %</th><th>Avg Overrun</th></tr></thead>
           <tbody id="anDisciplineScorecard"></tbody></table></div>
+        <div class="card"><h2 id="anActivityTitle">Recent Activity</h2>
+          <p style="font-size:11.5px;color:var(--muted);margin-top:-6px;">The last 12 things that happened, newest first — follows the building selected above.</p>
+          <div id="recentActivity"></div></div>
       </div>
 
       <div id="gcsub-directory" class="gcsubview">
@@ -5028,6 +5046,25 @@ function dashBuildingOrder(){
     .sort(function(a,b){ return counts[b]-counts[a] || a.localeCompare(b); });
   return {order: pinned.concat(rest), counts: counts};
 }
+/* Remembering which sections are open is per-device, like the pager sizes --
+   a view preference, not project data, so it never goes to the cloud. */
+let _attnOpen = (function(){ try { return JSON.parse(localStorage.getItem('scAttnOpen')||'{}'); } catch(e){ return {}; } })();
+function attnToggle(key, isOpen){
+  _attnOpen[key] = isOpen;
+  try { localStorage.setItem('scAttnOpen', JSON.stringify(_attnOpen)); } catch(e){}
+}
+window.attnToggle = attnToggle;
+/* One section: a summary bar that always shows the count and the money,
+   and a body that folds. Collapsed by default -- the bars are the summary. */
+function attnSection(key, title, count, moneyText, bodyHtml, tone){
+  if(!count) return '';
+  const open = _attnOpen[key] ? ' open' : '';
+  return '<details class="attn-sec sec-'+(tone||'warn')+'"'+open
+    + ' ontoggle="attnToggle(&quot;'+key+'&quot;, this.open)">'
+    + '<summary>'+title+' <span class="attn-count">'+count+'</span>'
+    + (moneyText ? '<span class="attn-money">'+moneyText+'</span>' : '')
+    + '</summary><div class="attn-body">'+bodyHtml+'</div></details>';
+}
 function renderDashboard(){
   const bo = dashBuildingOrder();
   if(dashBldg !== 'ALL' && !bo.counts[dashBldg]) dashBldg = 'ALL';
@@ -5084,27 +5121,30 @@ function renderDashboard(){
   // idleCount participates in the empty check -- otherwise a portfolio whose
   // only problem is idle scaffolds reports "nothing flagged" and hides the
   // very list it should be leading with.
-  const idleCount = idleTotals(recs).count;
-  if(overdue.length===0 && attn.length===0 && flags.length===0 && idleCount===0){
+  const idle = idleTotals(recs);
+  const idleCount = idle.count;
+  const stalled = waitingList(recs).filter(function(x){ return (x.w.days||0) >= 7; });
+  if(overdue.length===0 && attn.length===0 && flags.length===0 && idleCount===0 && !stalled.length){
     html += '<div class="notice info">Nothing flagged right now — all standing scaffolds are within their expected duration and fully accounted for.</div>';
   } else {
-    html += pagedNotices('attnOverdue', overdue.map(r=>{
-      return '<div class="notice crit">⚠ <b>'+(r.tag||r.id)+'</b> ('+r.floor+' — '+r.room+') is overdue — expected down by '+fmtDate(r.dueDate)+'. <a href="#" onclick="openDetail(\''+r.id+'\');return false;">View</a></div>';
-    }), 'overdue');
-    html += pagedNotices('attnReady', attn.map(r=>{
-      const active = activeContractors(r.usageLog).join(', ');
-      return '<div class="notice warn">⚠ <b>'+(r.tag||r.id)+'</b> — requestor '+r.requestor.name+' marked Finished - Ready to Dismantle, but '+active+' still signed in as active. <a href="#" onclick="openDetail(\''+r.id+'\');return false;">View</a></div>';
-    }), 'flagged');
-    // Anything blocked on a person for a week or more, with who to call --
-    // this is the class of problem that used to be invisible because it sat
-    // in no queue at all.
+    const M2 = moneyTotals(recs);
+    html += attnSection('secOverdue', '⚠ Overdue — past their expected down date', overdue.length,
+      M2.overdue > 0 ? fmtMoney(M2.overdue) + ' rental' : '',
+      pagedNotices('attnOverdue', overdue.map(r=>{
+        return '<div class="notice crit">⚠ <b>'+(r.tag||r.id)+'</b> ('+r.floor+' — '+r.room+') is overdue — expected down by '+fmtDate(r.dueDate)+'. <a href="#" onclick="openDetail(''+r.id+'');return false;">View</a></div>';
+      }), 'overdue'), 'crit');
+
+    html += attnSection('secReady', '⚠ Marked ready to dismantle, crew still signed in', attn.length, '',
+      pagedNotices('attnReady', attn.map(r=>{
+        const active = activeContractors(r.usageLog).join(', ');
+        return '<div class="notice warn">⚠ <b>'+(r.tag||r.id)+'</b> — requestor '+r.requestor.name+' marked Finished - Ready to Dismantle, but '+active+' still signed in as active. <a href="#" onclick="openDetail(''+r.id+'');return false;">View</a></div>';
+      }), 'flagged'), 'warn');
+
     // Standing, in-duration, and untouched -- the expensive quiet case.
     // Sorted by money so the worst offender is the first thing read.
-    const idle = idleTotals(recs);
-    if(idle.count){
-      html += '<h3 style="margin-top:14px;">Idle — Standing But Unused'
-        + (idle.accrued>0 ? ' · '+fmtMoney(idle.accrued)+' accrued' : '') + '</h3>';
-      html += pagedNotices('attnIdle', idle.list.map(function(x){
+    html += attnSection('secIdle', 'Idle — standing but unused', idle.count,
+      idle.accrued > 0 ? fmtMoney(idle.accrued) + ' accrued' : '',
+      pagedNotices('attnIdle', idle.list.map(function(x){
         const r = x.rec, i = x.idle;
         const cls = i.kind==='unclaimed' ? 'crit' : 'warn';
         const who = i.kind==='unclaimed'
@@ -5115,51 +5155,30 @@ function renderDashboard(){
           + ' — '+who
           + (i.rate>0 ? ' · <b>'+fmtMoney(i.accrued)+'</b> since '+fmtDate(i.since) : '')
           + (i.alsoOverdue ? ' · already overdue' : '')
-          + ' <a href="#" onclick="openDetail(\''+r.id+'\');return false;">View</a></div>';
-      }), 'idle');
-      
-    }
-    const stalled = waitingList(recs).filter(function(x){ return (x.w.days||0) >= 7; });
-    if(stalled.length){
-      html += '<h3 style="margin-top:14px;">⏳ Waiting On Someone</h3>';
-      html += pagedNotices('attnWaiting', stalled.map(function(x){
+          + ' <a href="#" onclick="openDetail(''+r.id+'');return false;">View</a></div>';
+      }), 'idle'), 'crit');
+
+    // Anything blocked on a person for a week or more, with who to call --
+    // this is the class of problem that used to be invisible because it sat
+    // in no queue at all.
+    html += attnSection('secWaiting', '⏳ Waiting on someone', stalled.length, '',
+      pagedNotices('attnWaiting', stalled.map(function(x){
         const w = x.w, r = x.rec;
         const reach = [w.phone, w.email].filter(Boolean).join(' · ');
         return '<div class="notice warn"><b>'+(r.tag||r.id)+'</b> — '+w.what
           + ' — waiting <b>'+w.days+' days</b> on <b>'+w.who+'</b>'
           + (w.company && w.company!==w.who ? ' ('+w.company+')' : '')
           + (reach ? ' · '+reach : '')
-          + ' <a href="#" onclick="openDetail(\''+r.id+'\');return false;">View</a></div>';
-      }), 'waiting');
-    }
-    if(flags.length){
-      html += '<h3 style="margin-top:14px;">📊 Portfolio Patterns</h3>';
-      html += pagedNotices('attnPatterns', flags.map(f=>{
-        return '<div class="notice warn">'+f.message+' <a href="#" onclick="openDetail(\''+f.ids[0]+'\');return false;">View first</a></div>';
-      }), 'patterns');
-    }
+          + ' <a href="#" onclick="openDetail(''+r.id+'');return false;">View</a></div>';
+      }), 'waiting'), 'warn');
+
+    html += attnSection('secPatterns', '📊 Portfolio patterns', flags.length, '',
+      pagedNotices('attnPatterns', flags.map(f=>{
+        return '<div class="notice warn">'+f.message+' <a href="#" onclick="openDetail(''+f.ids[0]+'');return false;">View first</a></div>';
+      }), 'patterns'), 'warn');
   }
   attnCard.innerHTML = html;
 
-  /* Site view lists the buildings; inside one building it drops to floors. */
-  const byBuilding = dashBldg === 'ALL'
-    ? state.buildings.map(b=>({label:b, count: standing.filter(r=>r.building===b).length}))
-    : ((state.buildingFloors||{})[dashBldg]||[]).map(f=>({label:f, count: standing.filter(r=>r.floor===f).length}));
-  const maxB = Math.max(1, ...byBuilding.map(f=>f.count));
-  const ct = document.getElementById('dashChartTitle');
-  if(ct) ct.textContent = dashBldg === 'ALL'
-    ? 'Scaffolds by Building (currently standing)'
-    : dashBldg + ' by Floor (currently standing)';
-  document.getElementById('floorBarChart').innerHTML = byBuilding.map(f=>
-    '<div class="bar-row"><div class="lbl">'+f.label+'</div><div class="bar-track"><div class="bar-fill" style="width:'+(f.count/maxB*100)+'%"></div></div><div class="bar-count">'+f.count+'</div></div>'
-  ).join('');
-
-  const activity = [];
-  recs.forEach(r=> r.history.forEach(h=> activity.push({...h, ref: r.tag||r.id})));
-  activity.sort((a,b)=> b.date.localeCompare(a.date));
-  document.getElementById('recentActivity').innerHTML = activity.slice(0,8).map(a=>
-    '<div class="tl-item"><b>'+a.ref+'</b> — '+a.event+' <span style="color:var(--muted)">('+a.actor+', '+fmtDate(a.date)+')</span>'+(a.note?'<div class="tl-note">'+a.note+'</div>':'')+'</div>'
-  ).join('') || '<div class="empty">No activity yet.</div>';
 }
 
 /* ---------------- ASK-ABOUT-THIS-SCAFFOLD SEARCH BAR ----------------
@@ -7042,6 +7061,16 @@ function renderAnalytics(){
   const discRows = disciplines.map(function(d){
     return { d: d, stats: scorecardStats(recs.filter(r=>r.discipline===d)) };
   }).filter(function(row){ return row.stats; });
+  const at = document.getElementById('anActivityTitle');
+  if(at) at.textContent = anBldg === 'ALL' ? 'Recent Activity — Entire Site' : 'Recent Activity — ' + anBldg;
+  const activity = [];
+  recs.forEach(r=> (r.history||[]).forEach(h=> activity.push({...h, ref: r.tag||r.id})));
+  activity.sort((a,b)=> String(b.date).localeCompare(String(a.date)));
+  const actEl = document.getElementById('recentActivity');
+  if(actEl) actEl.innerHTML = activity.slice(0,12).map(a=>
+    '<div class="tl-item"><b>'+a.ref+'</b> — '+a.event+' <span style="color:var(--muted)">('+a.actor+', '+fmtDate(a.date)+')</span>'+(a.note?'<div class="tl-note">'+a.note+'</div>':'')+'</div>'
+  ).join('') || '<div class="empty">No activity yet.</div>';
+
   document.getElementById('anDisciplineScorecard').innerHTML = discRows.length
     ? discRows.slice().sort(function(a,b){ return b.stats.avgOverrun - a.stats.avgOverrun; }).map(function(row){
         return '<tr><td><b>'+row.d+'</b></td><td>'+row.stats.closedCount+'</td><td>'+row.stats.onTimePct+'%</td><td>'+(row.stats.avgOverrun>0?row.stats.avgOverrun+' days':'—')+'</td></tr>';
