@@ -614,6 +614,16 @@ tr.stage-live{background:transparent;}
 .tl-item{position:relative;padding:var(--sp-2) 0;font-size:var(--fs-xs);}
 .tl-item::before{content:'';position:absolute;left:-21px;top:13px;width:8px;height:8px;border-radius:50%;background:var(--border-strong);}
 .tl-item b{color:var(--ink);}
+/* A history line that opens its scaffold has to look like it will. The
+   chevron and the hover lift are the whole tell -- without them people
+   read the list and never discover it is live. */
+.tl-item.tl-click{cursor:pointer;border-radius:var(--r-sm);padding-left:var(--sp-2);padding-right:var(--sp-5);
+  margin-left:calc(var(--sp-2) * -1);transition:background .12s ease, transform .12s ease;}
+.tl-item.tl-click:hover{background:var(--accent-soft);transform:translateX(2px);}
+.tl-item.tl-click:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+.tl-item.tl-click .tl-go{position:absolute;right:var(--sp-2);top:50%;transform:translateY(-50%);
+  color:var(--muted);font-size:var(--fs-sm);opacity:0;transition:opacity .12s ease, transform .12s ease;}
+.tl-item.tl-click:hover .tl-go{opacity:1;transform:translateY(-50%) translateX(2px);color:var(--accent);}
 .tl-note{color:var(--muted);font-style:italic;}
 .meta-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-2) var(--sp-4);font-size:var(--fs-xs);margin-bottom:12px;}
 /* Labels name the data; they are not the data. Rendering them as filled
@@ -1731,16 +1741,17 @@ footer{text-align:center;color:#9aa3af;font-size:var(--fs-2xs);margin-top:30px;p
           <div id="anCostSummary"></div></div>
         <div class="card" id="anBleedCard" style="display:none;"></div>
         <div class="card"><h2>Builder Scorecard</h2>
-          <p style="font-size:11.5px;color:var(--muted);margin-top:-6px;">On-time % and average overrun per builder company, based on scaffolds they've fully closed out. The pattern the predictive heads-up in the wizard is built from.</p>
-          <table class="scorecard-table"><thead><tr><th>Builder</th><th>Closed Out</th><th>On-Time %</th><th>Avg Overrun</th><th>Currently Overdue</th></tr></thead>
+          <p style="font-size:11.5px;color:var(--muted);margin-top:-6px;">Who is holding scaffold and what it costs, per builder company. On-Time % fills in as jobs get dismantled; everything left of it is live today.</p>
+          <table class="scorecard-table"><thead><tr><th>Builder</th><th>Standing</th><th>Past 60 Days</th><th>Avg Days Up</th><th>Rent / Day</th><th>On-Time %</th></tr></thead>
           <tbody id="anBuilderScorecard"></tbody></table></div>
         <div class="card"><h2>Discipline Scorecard</h2>
-          <p style="font-size:11.5px;color:var(--muted);margin-top:-6px;">Same idea, by trade — which disciplines tend to run long across every building.</p>
-          <table class="scorecard-table"><thead><tr><th>Discipline</th><th>Closed Out</th><th>On-Time %</th><th>Avg Overrun</th></tr></thead>
+          <p style="font-size:11.5px;color:var(--muted);margin-top:-6px;">The same read by trade — which disciplines are sitting on scaffold longest, and what that is costing. Sorted by rent per day.</p>
+          <table class="scorecard-table"><thead><tr><th>Discipline</th><th>Standing</th><th>Past 60 Days</th><th>Avg Days Up</th><th>Rent / Day</th><th>On-Time %</th></tr></thead>
           <tbody id="anDisciplineScorecard"></tbody></table></div>
         <div class="card"><h2 id="anActivityTitle">Recent Activity</h2>
-          <p style="font-size:11.5px;color:var(--muted);margin-top:-6px;">The last 12 things that happened, newest first — follows the building selected above.</p>
-          <div id="recentActivity"></div></div>
+          <p style="font-size:11.5px;color:var(--muted);margin-top:-6px;">The last 30 things that happened, newest first — follows the building selected above. Click any line to open that scaffold.</p>
+          <div id="recentActivity"></div>
+          <div id="recentActivityPager"></div></div>
       </div>
 
       <div id="gcsub-directory" class="gcsubview">
@@ -3614,6 +3625,59 @@ function scorecardStats(records){
   const overruns = closed.map(r=>daysBetween(parseDate(r.dueDate), parseDate(r.dateDismantled))).filter(d=>d>0);
   const avgOverrun = overruns.length ? Math.round(overruns.reduce((a,b)=>a+b,0)/overruns.length) : 0;
   return { closedCount: closed.length, onTimePct: Math.round(onTime/closed.length*100), avgOverrun };
+}
+
+/* ---- Live scorecard --------------------------------------------------
+   scorecardStats() above only scores a FULLY CLOSED-OUT job -- built and
+   then dismantled. That is the right way to judge whether somebody
+   finished on time, and it is what the wizard's predictive heads-up
+   learns from.
+
+   But the register we run on is the AMECO *standing* scaffold report:
+   every row is still up, so not one of them has a dismantle date, and
+   both scorecards rendered "Not enough closed-out history yet" against
+   249 live scaffolds. Technically honest, practically useless -- the
+   question a GC actually asks is "who is sitting on scaffold right now
+   and what is it costing me," and that IS answerable today.
+
+   So this returns the live read: how many are standing, how many are
+   past the 60-day free window, how long they have been up on average,
+   and the daily rent. On-time % stays blank until closeouts exist
+   rather than being faked from in-flight jobs.
+   -------------------------------------------------------------------- */
+function liveScorecardStats(records){
+  const standing = records.filter(function(r){ return r.dateBuilt && !r.dateDismantled; });
+  if(!standing.length) return null;
+  const ages = standing.map(function(r){ return daysStanding(r); }).filter(function(d){ return d != null; });
+  const avgDays = ages.length ? Math.round(ages.reduce(function(a,b){ return a+b; },0)/ages.length) : 0;
+  const pastFree = standing.filter(function(r){ return billableDays(r) > 0; }).length;
+  const rentPerDay = standing.reduce(function(sum,r){
+    return sum + (billableDays(r) > 0 ? (effectiveDailyRate(r)||0) : 0);
+  }, 0);
+  return { standing: standing.length, pastFree: pastFree, avgDays: avgDays, rentPerDay: rentPerDay };
+}
+
+/* One row shared by both scorecards -- same columns, different label. */
+function scorecardRow(label, recs){
+  const live = liveScorecardStats(recs);
+  if(!live) return null;
+  const closed = scorecardStats(recs);
+  const money = moneyVisible();
+  return {
+    live: live,
+    rent: live.rentPerDay,
+    html: '<tr><td><b>' + label + '</b></td>'
+      + '<td>' + live.standing + '</td>'
+      + '<td>' + (live.pastFree > 0
+          ? '<span style="color:var(--red);font-weight:var(--fw-bold);">' + live.pastFree + '</span>'
+          : '0') + '</td>'
+      + '<td>' + live.avgDays + ' days</td>'
+      + '<td>' + (money ? fmtMoney(live.rentPerDay) : '—') + '</td>'
+      + '<td>' + (closed
+          ? closed.onTimePct + '% <span style="color:var(--muted);font-size:11px;">(' + closed.closedCount + ' closed)</span>'
+          : '<span style="color:var(--muted);" title="Fills in once scaffolds start getting dismantled">not yet</span>') + '</td>'
+      + '</tr>'
+  };
 }
 /* ---- Aging buckets --------------------------------------------------
    The AURA weekly report gives "Days Standing" as a raw number you have
@@ -7055,39 +7119,56 @@ function renderAnalytics(){
     const bc=document.getElementById('anBleedCard'); if(bc) bc.style.display='none';
   }
 
-  // Builder Scorecard -- only builders with at least one fully closed-out
-  // job get ranked, since there's nothing to score on an in-flight job.
+  // Builder Scorecard -- ranked by the rent they are running per day,
+  // because that is the number that decides who gets chased first.
   const builderNames = Array.from(new Set(recs.map(r=>r.builderCompany).filter(Boolean)));
   const builderRows = builderNames.map(function(name){
-    const theirRecs = recs.filter(r=>r.builderCompany===name);
-    return { name: name, stats: scorecardStats(theirRecs), overdueNow: theirRecs.filter(isOverdueAny).length };
-  }).filter(function(row){ return row.stats; });
+    return scorecardRow(name, recs.filter(function(r){ return r.builderCompany===name; }));
+  }).filter(Boolean);
   document.getElementById('anBuilderScorecard').innerHTML = builderRows.length
-    ? builderRows.slice().sort(function(a,b){ return b.stats.onTimePct - a.stats.onTimePct; }).map(function(row){
-        return '<tr><td><b>'+row.name+'</b></td><td>'+row.stats.closedCount+'</td><td>'+row.stats.onTimePct+'%</td><td>'+(row.stats.avgOverrun>0?row.stats.avgOverrun+' days':'—')+'</td><td>'+(row.overdueNow>0?'<span style="color:var(--red);font-weight:bold;">'+row.overdueNow+'</span>':'0')+'</td></tr>';
-      }).join('')
-    : '<tr><td colspan="5"><div class="empty">Not enough closed-out history yet.</div></td></tr>';
+    ? builderRows.sort(function(a,b){ return b.rent - a.rent || b.live.standing - a.live.standing; })
+        .map(function(row){ return row.html; }).join('')
+    : '<tr><td colspan="6"><div class="empty">Nothing standing in this view.</div></td></tr>';
 
-  // Discipline Scorecard -- same idea, aggregated by trade instead of company.
+  // Discipline Scorecard -- same columns, aggregated by trade.
   const disciplines = Array.from(new Set(recs.map(r=>r.discipline).filter(Boolean)));
   const discRows = disciplines.map(function(d){
-    return { d: d, stats: scorecardStats(recs.filter(r=>r.discipline===d)) };
-  }).filter(function(row){ return row.stats; });
+    return scorecardRow(d, recs.filter(function(r){ return r.discipline===d; }));
+  }).filter(Boolean);
+  document.getElementById('anDisciplineScorecard').innerHTML = discRows.length
+    ? discRows.sort(function(a,b){ return b.rent - a.rent || b.live.standing - a.live.standing; })
+        .map(function(row){ return row.html; }).join('')
+    : '<tr><td colspan="6"><div class="empty">Nothing standing in this view.</div></td></tr>';
+
+  /* Recent Activity -- 30 kept, 10 to a page, every line opens its
+     scaffold. It used to print 12 lines that looked clickable and were
+     not: you could read that tag 2592 was approved and then had to go
+     search for 2592 by hand to see anything about it. */
   const at = document.getElementById('anActivityTitle');
   if(at) at.textContent = anBldg === 'ALL' ? 'Recent Activity — Entire Site' : 'Recent Activity — ' + anBldg;
   const activity = [];
-  recs.forEach(r=> (r.history||[]).forEach(h=> activity.push({...h, ref: r.tag||r.id})));
-  activity.sort((a,b)=> String(b.date).localeCompare(String(a.date)));
+  recs.forEach(function(r){
+    (r.history||[]).forEach(function(h){
+      activity.push({date:h.date, event:h.event, actor:h.actor, note:h.note,
+                     ref: r.tag || r.id, id: r.id});
+    });
+  });
+  activity.sort(function(a,b){ return String(b.date).localeCompare(String(a.date)); });
+  const recent = activity.slice(0, 30);
+  const pgAct = pageSlice('anActivity', recent.map(function(a){
+    return '<div class="tl-item tl-click" role="button" tabindex="0"'
+      + ' onclick="openDetail(\''+a.id+'\')"'
+      + ' onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();openDetail(\''+a.id+'\');}"'
+      + ' title="Open scaffold '+a.ref+'">'
+      + '<b>'+a.ref+'</b> — '+a.event
+      + ' <span style="color:var(--muted)">('+a.actor+', '+fmtDate(a.date)+')</span>'
+      + (a.note ? '<div class="tl-note">'+a.note+'</div>' : '')
+      + '<span class="tl-go" aria-hidden="true">\u203a</span></div>';
+  }));
   const actEl = document.getElementById('recentActivity');
-  if(actEl) actEl.innerHTML = activity.slice(0,12).map(a=>
-    '<div class="tl-item"><b>'+a.ref+'</b> — '+a.event+' <span style="color:var(--muted)">('+a.actor+', '+fmtDate(a.date)+')</span>'+(a.note?'<div class="tl-note">'+a.note+'</div>':'')+'</div>'
-  ).join('') || '<div class="empty">No activity yet.</div>';
-
-  document.getElementById('anDisciplineScorecard').innerHTML = discRows.length
-    ? discRows.slice().sort(function(a,b){ return b.stats.avgOverrun - a.stats.avgOverrun; }).map(function(row){
-        return '<tr><td><b>'+row.d+'</b></td><td>'+row.stats.closedCount+'</td><td>'+row.stats.onTimePct+'%</td><td>'+(row.stats.avgOverrun>0?row.stats.avgOverrun+' days':'—')+'</td></tr>';
-      }).join('')
-    : '<tr><td colspan="4"><div class="empty">Not enough closed-out history yet.</div></td></tr>';
+  if(actEl) actEl.innerHTML = pgAct.rows.join('') || '<div class="empty">No activity yet.</div>';
+  const actPager = document.getElementById('recentActivityPager');
+  if(actPager) actPager.innerHTML = pagerHtml('anActivity', pgAct, 'events');
 }
 
 /* ---------------- NOTIFICATIONS TAB ---------------- */
