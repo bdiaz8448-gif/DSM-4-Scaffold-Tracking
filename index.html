@@ -533,8 +533,15 @@ tr.stage-live{background:transparent;}
 .wiz-type-card{cursor:pointer;margin-bottom:0;border:2px solid var(--border);transition:all .2s;}
 .wiz-type-card:hover{border-color:var(--blue);transform:translateY(-1px);}
 .wiz-type-card p{font-size:var(--fs-xs);color:var(--muted);}
-.wiz-type-card.selected{background:linear-gradient(135deg,#0E9F6E,#0b7d55);border-color:#0b7d55;box-shadow:var(--shadow-md);}
-.wiz-type-card.selected h3,.wiz-type-card.selected p{color:white;}
+/* The chosen type is green with a checkmark. Written as .card.wiz-type-card
+   .selected so it outranks the panel recipe further down -- at equal
+   specificity the later rule wins, and that repainted the selected card
+   white while its text stayed white. Same trap the ask card hit. */
+.card.wiz-type-card.selected, .wiz-type-card.selected{
+  background:linear-gradient(135deg,#0E9F6E,#0b7d55);border-color:#0b7d55;
+  box-shadow:var(--shadow-md);backdrop-filter:none;-webkit-backdrop-filter:none;}
+.card.wiz-type-card.selected h3,.card.wiz-type-card.selected p,
+.wiz-type-card.selected h3,.wiz-type-card.selected p{color:#fff;}
 .wiz-type-check{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;
   background:rgba(255,255,255,.28);font-size:var(--fs-xs);margin-right:6px;animation:checkPop .35s cubic-bezier(.34,1.56,.64,1);}
 
