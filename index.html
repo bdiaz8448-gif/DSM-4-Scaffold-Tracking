@@ -5131,13 +5131,13 @@ function renderDashboard(){
     html += attnSection('secOverdue', '⚠ Overdue — past their expected down date', overdue.length,
       M2.overdue > 0 ? fmtMoney(M2.overdue) + ' rental' : '',
       pagedNotices('attnOverdue', overdue.map(r=>{
-        return '<div class="notice crit">⚠ <b>'+(r.tag||r.id)+'</b> ('+r.floor+' — '+r.room+') is overdue — expected down by '+fmtDate(r.dueDate)+'. <a href="#" onclick="openDetail(''+r.id+'');return false;">View</a></div>';
+        return '<div class="notice crit">⚠ <b>'+(r.tag||r.id)+'</b> ('+r.floor+' — '+r.room+') is overdue — expected down by '+fmtDate(r.dueDate)+'. <a href="#" onclick="openDetail(\''+r.id+'\');return false;">View</a></div>';
       }), 'overdue'), 'crit');
 
     html += attnSection('secReady', '⚠ Marked ready to dismantle, crew still signed in', attn.length, '',
       pagedNotices('attnReady', attn.map(r=>{
         const active = activeContractors(r.usageLog).join(', ');
-        return '<div class="notice warn">⚠ <b>'+(r.tag||r.id)+'</b> — requestor '+r.requestor.name+' marked Finished - Ready to Dismantle, but '+active+' still signed in as active. <a href="#" onclick="openDetail(''+r.id+'');return false;">View</a></div>';
+        return '<div class="notice warn">⚠ <b>'+(r.tag||r.id)+'</b> — requestor '+r.requestor.name+' marked Finished - Ready to Dismantle, but '+active+' still signed in as active. <a href="#" onclick="openDetail(\''+r.id+'\');return false;">View</a></div>';
       }), 'flagged'), 'warn');
 
     // Standing, in-duration, and untouched -- the expensive quiet case.
@@ -5155,7 +5155,7 @@ function renderDashboard(){
           + ' — '+who
           + (i.rate>0 ? ' · <b>'+fmtMoney(i.accrued)+'</b> since '+fmtDate(i.since) : '')
           + (i.alsoOverdue ? ' · already overdue' : '')
-          + ' <a href="#" onclick="openDetail(''+r.id+'');return false;">View</a></div>';
+          + ' <a href="#" onclick="openDetail(\''+r.id+'\');return false;">View</a></div>';
       }), 'idle'), 'crit');
 
     // Anything blocked on a person for a week or more, with who to call --
@@ -5169,12 +5169,12 @@ function renderDashboard(){
           + ' — waiting <b>'+w.days+' days</b> on <b>'+w.who+'</b>'
           + (w.company && w.company!==w.who ? ' ('+w.company+')' : '')
           + (reach ? ' · '+reach : '')
-          + ' <a href="#" onclick="openDetail(''+r.id+'');return false;">View</a></div>';
+          + ' <a href="#" onclick="openDetail(\''+r.id+'\');return false;">View</a></div>';
       }), 'waiting'), 'warn');
 
     html += attnSection('secPatterns', '📊 Portfolio patterns', flags.length, '',
       pagedNotices('attnPatterns', flags.map(f=>{
-        return '<div class="notice warn">'+f.message+' <a href="#" onclick="openDetail(''+f.ids[0]+'');return false;">View first</a></div>';
+        return '<div class="notice warn">'+f.message+' <a href="#" onclick="openDetail(\''+f.ids[0]+'\');return false;">View first</a></div>';
       }), 'patterns'), 'warn');
   }
   attnCard.innerHTML = html;
