@@ -9728,6 +9728,7 @@ init();
      locations, trades, contractors -- so it lives in Firestore behind the
      access list, never in this file. This build ships with an empty
      SEED.history and fills it here once the reader is known to be allowed. */
+  var histRetries = 0;
   function loadHistory(){
     db.collection("sc_history").get().then(function(q){
       var closed = [], waiting = [];
@@ -9737,9 +9738,22 @@ init();
       });
       SEED.history = closed;
       SEED.awaitingErection = waiting;
+      /* renderAll() paints the dashboard, floor plan and tables but has no
+         idea the History view exists, so a plain safeRenderAll() left the
+         "not loaded yet" banner on screen even though 1,320 rows had just
+         arrived -- you had to leave the tab and come back. Paint History
+         itself, then let the rest refresh normally. */
+      if(typeof renderHistory === "function"){ try { renderHistory(); } catch(e){} }
       safeRenderAll();
-    }).catch(function(){ /* history is reference data -- a failure here
-                            must not take the live register down with it. */ });
+    }).catch(function(e){
+      /* This used to swallow the error silently, which is how a missing
+         Firestore rule looked identical to "no history exists". Say it. */
+      console.error("sc_history load failed:", e && e.code, e && e.message);
+      if(histRetries < 3){
+        histRetries++;
+        setTimeout(loadHistory, 2000 * histRetries);
+      }
+    });
   }
   function attachSync(){
     db.collection("sc_meta").doc("config").onSnapshot(
