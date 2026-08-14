@@ -1683,6 +1683,13 @@ footer{text-align:center;color:#9aa3af;font-size:var(--fs-2xs);margin-top:30px;p
       <p style="font-size:11.5px;color:var(--muted);margin-top:-6px;">
         The full record from AMECO's All Scaffolds report: what has been put up on this
         site since October 2024, and what has already come down. Pick a building.</p>
+      <div id="histNotLoaded" class="notice warn" style="display:none;">
+        <b>The history has not been loaded into the database yet — nothing is missing.</b>
+        All 1,317 closed-out scaffolds are sitting in <b>scaffold_seed.json</b> in the
+        DSM-4 Tracking folder. To load them: sign in as Owner, click
+        <b>Load register file</b> at the bottom-left of this page, and pick that file.
+        It takes about fifteen seconds and the page fills in by itself.
+      </div>
       <div id="histBldgTabs" class="building-tabs"></div>
       <div id="histKpis" class="kpi-row" style="margin-top:14px;"></div>
       <div class="notice info" style="margin-top:12px;">
@@ -5132,6 +5139,25 @@ function standingFor(b){
 }
 function renderHistory(){
   const all = historyAll();
+
+  /* An empty history means one of two very different things: this site has
+     genuinely never taken a scaffold down, or the history simply has not
+     been loaded into the database yet. Printing "Closed Out: 0" as a fact
+     in the second case reads as data loss -- it did, to BDiaz, in front of
+     people. Say which one it is. */
+  const notLoaded = !all.length;
+  const warn = document.getElementById('histNotLoaded');
+  if(warn) warn.style.display = notLoaded ? '' : 'none';
+  if(notLoaded){
+    ['histKpis','histTrend','histBySubArea','histByDiscipline',
+     'histByContractor','histTable','histPager'].forEach(function(id){
+      const el = document.getElementById(id);
+      if(el) el.innerHTML = '';
+    });
+    const tabs = document.getElementById('histBldgTabs');
+    if(tabs) tabs.innerHTML = '';
+    return;
+  }
 
   // Building tabs: Entire Site first, then DSM4, DSM3, then the rest by
   // volume -- the same order as the Dashboard so the two read alike.
