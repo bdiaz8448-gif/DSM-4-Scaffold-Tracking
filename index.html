@@ -1483,7 +1483,7 @@ footer{text-align:center;color:#9aa3af;font-size:var(--fs-2xs);margin-top:30px;p
 #seedPanel b{font-size:13px;} #seedPanel p{font-size:12px;color:#9aa1ab;margin:6px 0 10px;line-height:1.5;}
 #ownerUpdBtn{position:fixed;left:14px;bottom:14px;z-index:9998;font:500 12px/1 system-ui,-apple-system,'Segoe UI',sans-serif;
   color:#fff;background:#17191f;border:1px solid rgba(255,255,255,.22);border-radius:8px;padding:9px 12px;
-  cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.4);opacity:.55;transition:opacity .15s ease,transform .15s ease;}
+  cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.4);opacity:1;transition:opacity .15s ease,transform .15s ease;}
 #ownerUpdBtn:hover{opacity:1;transform:translateY(-1px);}
 </style>
 </head>
@@ -1689,6 +1689,10 @@ footer{text-align:center;color:#9aa3af;font-size:var(--fs-2xs);margin-top:30px;p
         DSM-4 Tracking folder. To load them: sign in as Owner, click
         <b>Load register file</b> at the bottom-left of this page, and pick that file.
         It takes about fifteen seconds and the page fills in by itself.
+        <div style="margin-top:10px;">
+          <button type="button" class="btn btn-primary" id="histLoadBtn"
+                  onclick="histOpenLoader()">Load register file&hellip;</button>
+        </div>
       </div>
       <div id="histBldgTabs" class="building-tabs"></div>
       <div id="histKpis" class="kpi-row" style="margin-top:14px;"></div>
@@ -5122,6 +5126,9 @@ function renderCurrent(){
    honest about that in the header rather than showing a blank column
    people would read as a data-entry failure.
    ---------------------------------------- */
+function histOpenLoader(){
+  if(window.openSeedUpdate) window.openSeedUpdate();
+}
 let histBldg = 'ALL';
 let _histQuery = '';
 function setHistBldg(b){ histBldg = b; _pagerPage['hist'] = 1; renderHistory(); }
@@ -5148,6 +5155,8 @@ function renderHistory(){
   const notLoaded = !all.length;
   const warn = document.getElementById('histNotLoaded');
   if(warn) warn.style.display = notLoaded ? '' : 'none';
+  const loadBtn = document.getElementById('histLoadBtn');
+  if(loadBtn) loadBtn.style.display = window.openSeedUpdate ? '' : 'none';
   if(notLoaded){
     ['histKpis','histTrend','histBySubArea','histByDiscipline',
      'histByContractor','histTable','histPager'].forEach(function(id){
@@ -9780,6 +9789,9 @@ init();
     try { $("seedFile").value = ""; } catch(e){}
   }
   function closeSeedUpdate(){ hideGate(); }
+  /* Published so the History page can offer the loader where the reader
+     actually is, instead of only in a corner button they have to find. */
+  window.openSeedUpdate = openSeedUpdate;
 
   /* The button only exists for an owner, so nobody else can even see the
      door. It sits bottom-left, out of the way of the app's own chrome. */
