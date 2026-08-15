@@ -1468,6 +1468,32 @@ footer{text-align:center;color:#9aa3af;font-size:var(--fs-2xs);margin-top:30px;p
 .flash-success{animation:flashGlow .9s ease;}
 
 @media(max-width:960px){.kpi-grid{grid-template-columns:repeat(3,1fr);}.form-grid{grid-template-columns:1fr;}.meta-grid{grid-template-columns:1fr;}}
+
+/* ---- floor plan: week-over-week strip ---------------------------- */
+.pw-strip{
+  display:flex; align-items:center; flex-wrap:wrap; gap:var(--sp-3);
+  margin:var(--sp-3) 0 0; padding:var(--sp-2) var(--sp-3);
+  border:1px solid var(--border); border-radius:var(--r-md);
+  background:var(--panel-fill-2); font-size:var(--fs-xs); line-height:1.5;
+}
+.pw-when{ font-weight:var(--fw-medium); color:var(--muted); letter-spacing:.02em;
+  white-space:nowrap; }
+.pw-cell{ color:var(--ink); white-space:nowrap; }
+.pw-cell b{ font-size:var(--fs-base); }
+.pw-up::before{ content:'▲'; color:var(--amber); margin-right:4px; font-size:var(--fs-3xs); }
+.pw-down::before{ content:'▼'; color:var(--green); margin-right:4px; font-size:var(--fs-3xs); }
+.pw-n{ font-weight:var(--fw-bold); }
+.pw-n.good{ color:var(--green); }
+.pw-n.bad{ color:var(--red); }
+.pw-flat{ color:var(--muted); }
+.pw-none{ color:var(--muted); }
+.pw-more{ margin-left:auto; background:none; border:0; padding:0 2px;
+  color:var(--accent); font:inherit; font-weight:var(--fw-medium); cursor:pointer; }
+.pw-more:hover{ text-decoration:underline; }
+@media (max-width:640px){
+  .pw-strip{ gap:var(--sp-2); font-size:var(--fs-2xs); }
+  .pw-more{ margin-left:0; }
+}
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
@@ -1658,6 +1684,7 @@ footer{text-align:center;color:#9aa3af;font-size:var(--fs-2xs);margin-top:30px;p
         </label>
       </div>
       <div class="floor-tabs" id="floorTabs" style="margin-top:14px;"></div>
+      <div id="planWeekStrip" style="display:none;"></div>
       <div class="plan-wrap" id="planWrap"></div>
       <div class="legend">
         <span><i style="background:#8a5a00"></i>Pending GC Approval</span>
@@ -4798,6 +4825,55 @@ function checkOverdueNotifications(){
 </script>
 
 <script>
+/* Drag a weekly report anywhere onto the Week Over Week card.
+
+   This wiring used to sit INSIDE wizCancel(), so it only ran if you
+   started a request and then cancelled it -- which is why dropping a
+   file did nothing and the button was the only way in. Two things are
+   needed and only one of them is obvious:
+
+     - the drop zone has to handle dragover, not just drop; and
+     - the WINDOW has to swallow the default too, because a browser's
+       built-in behaviour for a dropped file is to navigate away from
+       the page and open it, and that fires first.  */
+function wireWeeklyDrop(){
+  const z = document.getElementById('wkDrop');
+  if(!z || z.dataset.dropWired) return;
+  z.dataset.dropWired = '1';
+
+  window.addEventListener('dragover', function(e){ e.preventDefault(); });
+  window.addEventListener('drop', function(e){ e.preventDefault(); });
+
+  function stop(e){ e.preventDefault(); e.stopPropagation(); }
+  ['dragenter','dragover'].forEach(function(ev){
+    z.addEventListener(ev, function(e){
+      stop(e);
+      if(e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+      z.classList.add('drag');
+    });
+  });
+  ['dragleave','dragend'].forEach(function(ev){
+    z.addEventListener(ev, function(e){ stop(e); z.classList.remove('drag'); });
+  });
+  z.addEventListener('drop', function(e){
+    stop(e);
+    z.classList.remove('drag');
+    const dt = e.dataTransfer;
+    let f = dt && dt.files && dt.files.length ? dt.files[0] : null;
+    /* Some sources hand over items rather than files. */
+    if(!f && dt && dt.items){
+      for(let i = 0; i < dt.items.length; i++){
+        if(dt.items[i].kind === 'file'){ f = dt.items[i].getAsFile(); break; }
+      }
+    }
+    if(!f){ wkSay('Could not read that drop. Use the button instead.', 'err'); return; }
+    if(!/\.xlsx$/i.test(f.name)){
+      wkSay('That is not an .xlsx file: ' + f.name, 'err'); return;
+    }
+    weeklyUploadFile(f);
+  });
+}
+
 function init(){
   state = loadState();
   applyTheme();
@@ -4842,6 +4918,7 @@ function init(){
   // point of the public experience.
   showTab(state.currentTab || (visibleTabs()[0] || {id:'request'}).id);
   checkDeepLink();
+  wireWeeklyDrop();
 }
 // Deep link support: #scaffold=REQ-1003 in the URL opens that scaffold's
 // detail view once the app and its data have finished loading. Useful for
@@ -5472,9 +5549,13 @@ let _wkPending = null;   // parsed snapshot awaiting nothing -- kept for the mes
 
 /* Read a dropped weekly report and fold it in. Everything happens in the
    browser: the file is never uploaded anywhere, only the summary is saved. */
-async function weeklyUploadFile(file){
+function wkSay(t, cls){
   const msg = document.getElementById('wkMsg');
-  const say = function(t, cls){ if(msg){ msg.textContent = t; msg.className = 'wk-msg ' + (cls||''); } };
+  if(msg){ msg.textContent = t; msg.className = 'wk-msg ' + (cls||''); }
+}
+
+async function weeklyUploadFile(file){
+  const say = wkSay;
   if(!file) return;
   try {
     say('Reading ' + file.name + '…');
@@ -5496,78 +5577,31 @@ async function weeklyUploadFile(file){
     const replaced = before.length !== (state.snapshots || []).length;
     state.snapshots = before.concat([snap]);
 
-    /* BDiaz chose: the newest report becomes the live register. Apply it
-       only when this really is the newest, so re-uploading an old week to
-       fill in the trend cannot roll the register backwards. */
-    const all = snapshotsSorted();
-    let applied = null;
-    if(all.length && all[all.length - 1].date === asOf) applied = applyWeeklyToRegister(snap);
+    /* A WEEKLY REPORT NEVER TOUCHES THE LIVE REGISTER.
+       It used to. The rule was "the newest snapshot wins", and the first
+       file BDiaz loaded was the OLDER one -- with no other snapshot to
+       compare against it counted as newest, rewrote the register back to
+       27 July, marked 53 standing scaffolds dismantled and invented 61
+       that had already come down. Loading August afterwards re-added the
+       missing ones but never un-dismantled the 53.
 
+       Reports are history. They are for looking at, in any order, without
+       the dashboard moving under you. Changing what is standing today is
+       a deliberate act, not a side effect of opening a file. */
     saveState();
     renderAll();
     if(typeof renderHistory === 'function') { try { renderHistory(); } catch(e){} }
 
+    const all2 = snapshotsSorted();
     let note = (replaced ? 'Replaced' : 'Added') + ' the ' + fmtDate(asOf) + ' report — '
-             + snap.standing + ' standing, ' + fmtMoney(snap.burn) + '/day.';
-    if(applied) note += ' Register updated: ' + applied.added + ' new, '
-                      + applied.closed + ' moved to history.';
-    else if(all.length > 1) note += ' Kept for the trend; the register still follows '
-                      + fmtDate(all[all.length-1].date) + '.';
+             + snap.standing + ' standing, ' + fmtMoney(snap.burn) + '/day. '
+             + all2.length + ' report' + (all2.length === 1 ? '' : 's') + ' loaded'
+             + (all2.length > 1 ? ', ' + fmtDate(all2[0].date) + ' to ' + fmtDate(all2[all2.length-1].date) : '')
+             + '. Nothing on the dashboard or floor plan changed.';
     say(note, 'ok');
   } catch(e){
     say(e && e.message ? e.message : 'That file could not be read.', 'err');
   }
-}
-
-/* Make the live register match the newest report: add scaffolds that
-   appeared, retire ones that are gone, refresh rate and location on the
-   rest. Pins and every hand-entered field on a surviving scaffold are
-   left alone -- the report has no idea where a pin was dropped. */
-function applyWeeklyToRegister(snap){
-  const inReport = snap.tags || {};
-  let added = 0, closed = 0, updated = 0;
-  const today = todayStr();
-
-  state.records.forEach(function(r){
-    if(!r.tag) return;
-    const t = inReport[r.tag];
-    if(t){
-      if(t.r && r.dailyRentalRate !== t.r){ r.dailyRentalRate = t.r; updated++; }
-      if(t.s && !r.subArea) r.subArea = t.s;
-      if(t.e && !r.dateBuilt) r.dateBuilt = t.e;
-    } else if(!r.dateDismantled){
-      /* Gone from the standing report means it came down. The report has
-         no takedown date, so record the report date and say why. */
-      r.dateDismantled = snap.date;
-      r.status = 'Dismantled';
-      r.history = (r.history || []).concat([{ date: snap.date,
-        event: 'Off the AMECO standing report',
-        actor: 'Weekly report ' + fmtDate(snap.date),
-        note: 'No longer listed as standing. AMECO does not give a takedown date, so this is the report date.' }]);
-      closed++;
-    }
-  });
-
-  const known = {};
-  state.records.forEach(function(r){ if(r.tag) known[r.tag] = 1; });
-  Object.keys(inReport).forEach(function(tag){
-    if(known[tag]) return;
-    const t = inReport[tag];
-    state.records.push({
-      id: 'wk-' + tag, tag: tag, type: 'Build', status: 'Built',
-      building: t.b, floor: (state.buildingFloors[t.b] || ['General Area'])[0],
-      subArea: t.s, room: t.l, loc: t.l, discipline: t.d || 'Other',
-      requestor: { name: t.q || 'Not stated', company: t.q || 'Not stated' },
-      builderCompany: 'AMECO', dailyRentalRate: t.r,
-      dateRequested: t.e, dateApproved: t.e, dateBuilt: t.e,
-      pin: null, gridRef: '',
-      hw: 'Came in on the ' + fmtDate(snap.date) + ' weekly report. No pin yet — drop one on the floor plan when known.',
-      history: [{ date: snap.date, event: 'Appeared on the AMECO standing report',
-                  actor: 'Weekly report ' + fmtDate(snap.date), note: '' }]
-    });
-    added++;
-  });
-  return { added: added, closed: closed, updated: updated };
 }
 
 /* ---------------- HISTORY ----------------
@@ -5605,8 +5639,8 @@ function standingFor(b){
 }
 /* Which two weeks are being compared. Null = the two most recent. */
 let wkFrom = null, wkTo = null;
-function setWkFrom(v){ wkFrom = v; renderWeekly(); }
-function setWkTo(v){ wkTo = v; renderWeekly(); }
+function setWkFrom(v){ wkFrom = v; renderWeekly(); renderPlanWeekStrip(); }
+function setWkTo(v){ wkTo = v; renderWeekly(); renderPlanWeekStrip(); }
 
 function renderWeekly(){
   const snaps = snapshotsSorted();
@@ -7064,20 +7098,6 @@ function wizCancel(){
   state.wiz = null;
   saveState();
   toast('Request cancelled — nothing was submitted');
-  (function(){
-    const z = document.getElementById('wkDrop');
-    if(!z) return;
-    ['dragenter','dragover'].forEach(function(ev){
-      z.addEventListener(ev, function(e){ e.preventDefault(); z.classList.add('drag'); });
-    });
-    ['dragleave','drop'].forEach(function(ev){
-      z.addEventListener(ev, function(e){ e.preventDefault(); z.classList.remove('drag'); });
-    });
-    z.addEventListener('drop', function(e){
-      const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-      if(f) weeklyUploadFile(f);
-    });
-  })();
   showTab('floorplan');
 }
 
@@ -7178,6 +7198,7 @@ function renderFloorPlan(){
     '<button class="floor-tab'+(state.planFloor===f?' active':'')+'" onclick="setPlanFloor(\''+f+'\')">'+f+' <span style="opacity:.7;">('+visibleRecords().filter(r=>r.building===state.planBuilding && r.floor===f && r.lifecycleStatus!=='Dismantled').length+')</span></button>'
   ).join('')+'</div>';
   document.getElementById('floorTabs').innerHTML = tabsHtml;
+  renderPlanWeekStrip();
 
   const gridData = gridDataFor(state.planBuilding, state.planFloor);
   const gridToggleEl = document.getElementById('gridToggleRow');
@@ -7207,6 +7228,62 @@ function renderFloorPlan(){
   }
   document.getElementById('planWrap').innerHTML = html;
 }
+/* What changed in THIS building between the two weeks the user picked
+   on Week Over Week. Standing in front of a floor plan, "12 came down
+   here since last week and we are still paying more" is the question,
+   and it should not require walking over to another tab to answer. */
+function renderPlanWeekStrip(){
+  const el = document.getElementById('planWeekStrip');
+  if(!el) return;
+  const snaps = (typeof snapshotsSorted === 'function') ? snapshotsSorted() : [];
+  if(snaps.length < 2){ el.innerHTML = ''; el.style.display = 'none'; return; }
+
+  /* Follow the same two weeks the Week Over Week tab is showing, so the
+     two views can never quietly disagree. */
+  const dates = snaps.map(function(s){ return s.date; });
+  let to = (dates.indexOf(wkTo) >= 0) ? wkTo : dates[dates.length - 1];
+  let from = (dates.indexOf(wkFrom) >= 0 && wkFrom < to)
+             ? wkFrom : dates[Math.max(0, dates.indexOf(to) - 1)];
+  const d = diffSnapshots(
+    snaps.filter(function(s){ return s.date === from; })[0],
+    snaps.filter(function(s){ return s.date === to;   })[0]);
+  if(!d){ el.innerHTML = ''; el.style.display = 'none'; return; }
+
+  const b = d.perBuilding.filter(function(x){ return x.building === state.planBuilding; })[0];
+  if(!b){
+    el.style.display = '';
+    el.innerHTML = '<div class="pw-strip"><span class="pw-when">'
+      + fmtDate(from) + ' → ' + fmtDate(to) + '</span>'
+      + '<span class="pw-none">No ' + state.planBuilding
+      + ' scaffolds in either report.</span></div>';
+    return;
+  }
+
+  /* Fewer scaffolds standing is good news; more rent is not. Colour by
+     what the number means on site, not by its sign. */
+  const cnt = function(n, goodWhenDown){
+    if(!n) return '<span class="pw-flat">no change</span>';
+    const good = goodWhenDown ? n < 0 : n > 0;
+    return '<span class="pw-n ' + (good ? 'good' : 'bad') + '">'
+         + (n > 0 ? '+' : '−') + Math.abs(n) + '</span>';
+  };
+  const money = b.burnDelta || 0;
+
+  el.style.display = '';
+  el.innerHTML = '<div class="pw-strip">'
+    + '<span class="pw-when">' + fmtDate(from) + ' → ' + fmtDate(to) + '</span>'
+    + '<span class="pw-cell"><b>' + b.now + '</b> standing ' + cnt(b.net, true) + '</span>'
+    + '<span class="pw-cell pw-up">' + b.added + ' went up</span>'
+    + '<span class="pw-cell pw-down">' + b.removed + ' came down</span>'
+    + '<span class="pw-cell">rent '
+    +   (money ? '<span class="pw-n ' + (money > 0 ? 'bad' : 'good') + '">'
+        + (money > 0 ? '+' : '−') + fmtMoney(Math.abs(money)) + '/day</span>'
+        : '<span class="pw-flat">unchanged</span>') + '</span>'
+    + '<button type="button" class="pw-more" onclick="showTab(\'weekly\')">'
+    +   'Week Over Week ›</button>'
+    + '</div>';
+}
+
 function toggleGridOverlay(){
   state.showGrid = document.getElementById('gridToggle').checked;
   saveState(); renderFloorPlan();
