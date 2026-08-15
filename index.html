@@ -1528,6 +1528,26 @@ details.fold > .fold-body{ padding-bottom:16px; }
 .wk-modes button:last-child{ border-radius:0 var(--r-sm) var(--r-sm) 0; }
 .wk-modes button.on{ background:var(--accent); border-color:var(--accent); color:#fff; }
 .wk-modes button:not(.on):hover{ color:var(--ink); }
+
+/* History and compare KPI strips carry a variable number of cards (4 to 6
+   depending on whether anything is awaiting erection), so they cannot use
+   the Dashboard's fixed 6-column grid. They were marked .kpi-row, a class
+   that has never had a rule -- so every card sat on its own line at full
+   width. Only visible by actually looking at the page. */
+.kpi-grid.kpi-auto{
+  grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));
+  margin-top:var(--sp-3); margin-bottom:0;
+}
+@media (max-width:520px){
+  .kpi-grid.kpi-auto{ grid-template-columns:repeat(2, 1fr); }
+}
+
+/* .table-wrap wrapped two of the widest tables in the app -- the closed
+   scaffold list is eight columns -- and had no rule at all, so on a phone
+   they simply ran off the edge with no way to reach the far columns.
+   .table-scroll already did the right thing and was never wired to them. */
+.table-wrap{ overflow-x:auto; -webkit-overflow-scrolling:touch; }
+@media (max-width:760px){ .table-wrap table{ min-width:640px; } }
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
@@ -1779,7 +1799,7 @@ details.fold > .fold-body{ padding-bottom:16px; }
         </div>
       </div>
       <div id="histBldgTabs" class="building-tabs"></div>
-      <div id="histKpis" class="kpi-row" style="margin-top:14px;"></div>
+      <div id="histKpis" class="kpi-grid kpi-auto"></div>
       <div class="notice info" style="margin-top:12px;">
         <b>About the dates.</b> Every date on this page is an <b>erect date</b> &mdash; the day
         the scaffold went up. AMECO&rsquo;s All Scaffolds tab does not carry a takedown date,
@@ -1851,7 +1871,7 @@ details.fold > .fold-body{ padding-bottom:16px; }
       </div>
       <div class="wk-modes" id="wkModes"></div>
       <div id="wkPickers" class="wk-pickers"></div>
-      <div id="wkKpis" class="kpi-row" style="margin-top:14px;"></div>
+      <div id="wkKpis" class="kpi-grid kpi-auto"></div>
       <div id="wkNote"></div>
       </div>
     </details>
