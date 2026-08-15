@@ -5492,6 +5492,25 @@ function snapshotFromRows(rows, asOf){
 /* What changed between two snapshots. Compares TAG SETS, not counts --
    a week where 20 went up and 20 came down nets to zero and would look
    like nothing happened. */
+/* Daily rent for one building as at a snapshot.
+
+   Recomputed from the snapshot's own tag rows rather than stored, so
+   every week already saved gets per-building money without anyone
+   re-uploading anything. Each tag carries its rate and erect date; the
+   free period is the same 60 days the rest of the app bills on. */
+function wkBuildingBurn(snap, building){
+  if(!snap || !snap.tags) return null;
+  const on = new Date(snap.date + 'T00:00:00');
+  let burn = 0;
+  Object.keys(snap.tags).forEach(function(t){
+    const x = snap.tags[t];
+    if(x.b !== building || !x.e || !x.r) return;
+    const days = Math.round((on - new Date(x.e + 'T00:00:00')) / 86400000);
+    if(days - STANDING_LIMIT_DAYS > 0) burn += x.r;
+  });
+  return Math.round(burn * 100) / 100;
+}
+
 function diffSnapshots(prev, curr){
   if(!prev || !curr) return null;
   const pt = prev.tags || {}, ct = curr.tags || {};
@@ -5504,9 +5523,13 @@ function diffSnapshots(prev, curr){
   Object.keys(curr.buildings || {}).forEach(function(b){ names[b] = 1; });
   const perBuilding = Object.keys(names).map(function(b){
     const was = (prev.buildings || {})[b] || 0, now = (curr.buildings || {})[b] || 0;
+    const bWas = wkBuildingBurn(prev, b), bNow = wkBuildingBurn(curr, b);
     return { building: b, was: was, now: now, net: now - was,
              added:   added.filter(function(t){ return ct[t].b === b; }).length,
-             removed: removed.filter(function(t){ return pt[t].b === b; }).length };
+             removed: removed.filter(function(t){ return pt[t].b === b; }).length,
+             burnWas: bWas, burnNow: bNow,
+             burnDelta: (bWas == null || bNow == null)
+                        ? null : Math.round((bNow - bWas) * 100) / 100 };
   }).sort(function(a, b){ return Math.abs(b.net) - Math.abs(a.net) || b.now - a.now; });
 
   const days = Math.round((new Date(curr.date + 'T00:00:00') -
@@ -7283,7 +7306,10 @@ function renderPlanWeekStrip(){
     return '<span class="pw-n ' + (good ? 'good' : 'bad') + '">'
          + (n > 0 ? '+' : '−') + Math.abs(n) + '</span>';
   };
-  const money = b.burnDelta || 0;
+  /* null means the snapshot could not produce a figure. Saying
+     "unchanged" in that case is a claim the data does not support --
+     the whole reason he stopped trusting the last version. */
+  const money = b.burnDelta;
 
   el.style.display = '';
   el.innerHTML = '<div class="pw-strip">'
@@ -7291,10 +7317,15 @@ function renderPlanWeekStrip(){
     + '<span class="pw-cell"><b>' + b.now + '</b> standing ' + cnt(b.net, true) + '</span>'
     + '<span class="pw-cell pw-up">' + b.added + ' went up</span>'
     + '<span class="pw-cell pw-down">' + b.removed + ' came down</span>'
-    + '<span class="pw-cell">rent '
-    +   (money ? '<span class="pw-n ' + (money > 0 ? 'bad' : 'good') + '">'
-        + (money > 0 ? '+' : '−') + fmtMoney(Math.abs(money)) + '/day</span>'
-        : '<span class="pw-flat">unchanged</span>') + '</span>'
+    + '<span class="pw-cell">'
+    +   (money == null
+         ? 'rent <span class="pw-flat">not in this report</span>'
+         : (money
+            ? 'rent <span class="pw-n ' + (money > 0 ? 'bad' : 'good') + '">'
+              + (money > 0 ? '+' : '−') + fmtMoney(Math.abs(money)) + '/day</span>'
+              + ' <span class="pw-flat">(now ' + fmtMoney(b.burnNow) + '/day)</span>'
+            : 'rent <span class="pw-flat">flat at ' + fmtMoney(b.burnNow) + '/day</span>'))
+    + '</span>'
     + '<button type="button" class="pw-more" onclick="gotoWeekOverWeek()">'
     +   'Week Over Week ›</button>'
     + '</div>';
