@@ -5357,7 +5357,15 @@ const WK_COL = { tag:1, contractor:2, rework:3, area:4, subArea:5, loc:6,
 function wkNorm(s){ return String(s == null ? '' : s).replace(/\s+/g,' ').trim(); }
 function wkTitle(s){
   s = wkNorm(s);
-  return s ? s.toLowerCase().replace(/\w/g, function(c){ return c.toUpperCase(); }) : '';
+  /* THE ESCAPING RULE. This JS lives inside a Python triple-quoted string
+     in build_app.py, and Python turns \b into a BACKSPACE character --
+     so the built file had /<0x08>\w/ and every name came out lowercase
+     ("delaware", "piping"). Matching a non-word char followed by a word
+     char says the same thing with no \b at all, so it cannot regress. */
+  if(!s) return '';
+  s = s.toLowerCase();
+  return s.charAt(0).toUpperCase() + s.slice(1).replace(/([^a-z0-9'])([a-z])/g,
+    function(_, sep, c){ return sep + c.toUpperCase(); });
 }
 /* Building names in the sheet are shouted (HEADBLOCK 2, TANK FARM).
    Map them to what the app calls them so a snapshot's per-building
