@@ -1494,6 +1494,40 @@ footer{text-align:center;color:#9aa3af;font-size:var(--fs-2xs);margin-top:30px;p
   .pw-strip{ gap:var(--sp-2); font-size:var(--fs-2xs); }
   .pw-more{ margin-left:0; }
 }
+
+/* ---- collapsible cards (History) --------------------------------
+   Native details/summary: it works with keyboard and screen readers
+   for free, and it still opens if the JS ever fails to run. */
+details.fold{ padding-top:0; padding-bottom:0; }
+details.fold > summary{
+  list-style:none; cursor:pointer; user-select:none;
+  display:flex; align-items:center; gap:var(--sp-3);
+  padding:14px 0; margin:0;
+}
+details.fold > summary::-webkit-details-marker{ display:none; }
+details.fold > summary::before{
+  content:''; flex:0 0 auto; width:8px; height:8px; margin-left:2px;
+  border-right:2px solid var(--muted); border-bottom:2px solid var(--muted);
+  transform:rotate(-45deg); transition:transform .18s ease;
+}
+details.fold[open] > summary::before{ transform:rotate(45deg); }
+details.fold > summary:hover::before{ border-color:var(--accent); }
+details.fold > summary h2{ margin:0; }
+details.fold > summary:focus-visible{ outline:2px solid var(--accent); outline-offset:3px; border-radius:var(--r-sm); }
+details.fold > .fold-body{ padding-bottom:16px; }
+.fold-sub{ font-size:var(--fs-2xs); color:var(--muted); margin:0 0 10px; }
+
+/* week / month toggle */
+.wk-modes{ display:flex; gap:var(--sp-hair); margin:12px 0 0; }
+.wk-modes button{
+  font:inherit; font-size:var(--fs-2xs); font-weight:var(--fw-medium);
+  padding:6px 14px; cursor:pointer; color:var(--muted);
+  background:var(--panel-fill-2); border:1px solid var(--border);
+}
+.wk-modes button:first-child{ border-radius:var(--r-sm) 0 0 var(--r-sm); }
+.wk-modes button:last-child{ border-radius:0 var(--r-sm) var(--r-sm) 0; }
+.wk-modes button.on{ background:var(--accent); border-color:var(--accent); color:#fff; }
+.wk-modes button:not(.on):hover{ color:var(--ink); }
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
@@ -1725,41 +1759,16 @@ footer{text-align:center;color:#9aa3af;font-size:var(--fs-2xs);margin-top:30px;p
   </div>
 
   <div id="view-history" class="view">
-    <div class="card">
-      <h2>Week Over Week</h2>
-      <p style="font-size:11.5px;color:var(--muted);margin-top:-6px;">
-        Drop in each AMECO weekly report as it arrives and this compares any two of them —
-        what went up, what came down, and whether the rent is rising or falling.
-        The file is read here in your browser; only the summary is saved.</p>
-      <div class="wk-drop" id="wkDrop">
-        <input type="file" id="wkFile" accept=".xlsx" style="display:none"
-               onchange="if(this.files&&this.files[0]){weeklyUploadFile(this.files[0]);this.value='';}">
-        <button type="button" class="btn btn-primary" onclick="document.getElementById('wkFile').click()">
-          Add a weekly report&hellip;</button>
-        <span class="wk-hint">or drag the .xlsx here &middot; the date comes from the file name</span>
-        <div class="wk-msg" id="wkMsg"></div>
-      </div>
-      <div id="wkPickers" class="wk-pickers"></div>
-      <div id="wkKpis" class="kpi-row" style="margin-top:14px;"></div>
-      <div id="wkNote"></div>
-    </div>
-    <div class="card" id="wkByBuildingCard"><h2>What Changed, By Building</h2>
-      <p style="font-size:11.5px;color:var(--muted);margin-top:-6px;">Net change is what the count did. Up and Down are the real traffic behind it — they rarely cancel out.</p>
-      <div class="table-wrap"><table class="data-table">
-        <thead><tr><th>Building</th><th>Was</th><th>Now</th><th>Net</th><th>Went Up</th><th>Came Down</th></tr></thead>
-        <tbody id="wkByBuilding"></tbody></table></div></div>
-    <div class="card" id="wkListCard"><h2>The Scaffolds That Moved</h2>
-      <div class="two-col">
-        <div><h3 class="sub-h">Went up in this window</h3><div id="wkAdded"></div></div>
-        <div><h3 class="sub-h">Came down in this window</h3><div id="wkRemoved"></div></div>
-      </div></div>
-    <div class="card">
-      <h2>Scaffold History — Every Scaffold Ever Built</h2>
-      <p style="font-size:11.5px;color:var(--muted);margin-top:-6px;">
-        The full record from AMECO's All Scaffolds report: what has been put up on this
+
+    <!-- 1 ................................. SCAFFOLD HISTORY -->
+    <details class="card fold" id="fold-hist" open>
+      <summary><h2>Scaffold History &mdash; Every Scaffold Ever Built</h2></summary>
+      <div class="fold-body">
+      <p class="fold-sub">
+        The full record from AMECO&rsquo;s All Scaffolds report: what has been put up on this
         site since October 2024, and what has already come down. Pick a building.</p>
       <div id="histNotLoaded" class="notice warn" style="display:none;">
-        <b>The history has not been loaded into the database yet — nothing is missing.</b>
+        <b>The history has not been loaded into the database yet &mdash; nothing is missing.</b>
         All 1,317 closed-out scaffolds are sitting in <b>scaffold_seed.json</b> in the
         DSM-4 Tracking folder. To load them: sign in as Owner, click
         <b>Load register file</b> at the bottom-left of this page, and pick that file.
@@ -1772,35 +1781,102 @@ footer{text-align:center;color:#9aa3af;font-size:var(--fs-2xs);margin-top:30px;p
       <div id="histBldgTabs" class="building-tabs"></div>
       <div id="histKpis" class="kpi-row" style="margin-top:14px;"></div>
       <div class="notice info" style="margin-top:12px;">
-        <b>About the dates.</b> AMECO's report records the day each scaffold went
-        <b>up</b>, but it does not record the day it came <b>down</b> — and its Days
-        Standing column keeps counting to today even after a scaffold is dismantled,
-        so the takedown date can't be worked out from it either. Every date on this
-        page is an <b>erect date</b>. Send a report with dismantle dates and this page
-        will show how long each one actually stood.
+        <b>About the dates.</b> Every date on this page is an <b>erect date</b> &mdash; the day
+        the scaffold went up. AMECO&rsquo;s All Scaffolds tab does not carry a takedown date,
+        and its Days Standing column keeps counting to today even after a scaffold is gone,
+        so how long each one actually stood cannot be read off this page yet.
       </div>
-    </div>
-    <div class="card"><h2>Built per Month</h2>
-      <p style="font-size:11.5px;color:var(--muted);margin-top:-6px;">Scaffolds erected each month — closed and still standing together. Follows the building selected above.</p>
-      <div id="histTrend"></div></div>
-    <div class="card"><h2>Where It Was Used</h2>
-      <p style="font-size:11.5px;color:var(--muted);margin-top:-6px;">Closed-out scaffolds by area of the building, then by the trade that asked for them.</p>
+      </div>
+    </details>
+
+    <details class="card fold" id="fold-hist-month" open>
+      <summary><h2>Built per Month</h2></summary>
+      <div class="fold-body">
+      <p class="fold-sub">Scaffolds erected each month &mdash; closed and still standing together.
+        Follows the building selected above.</p>
+      <div id="histTrend"></div>
+      </div>
+    </details>
+
+    <details class="card fold" id="fold-hist-where">
+      <summary><h2>Where It Was Used</h2></summary>
+      <div class="fold-body">
+      <p class="fold-sub">Closed-out scaffolds by area of the building, then by the trade that asked for them.</p>
       <div class="two-col">
         <div><h3 class="sub-h">By Sub Area</h3><div id="histBySubArea"></div></div>
         <div><h3 class="sub-h">By Discipline</h3><div id="histByDiscipline"></div></div>
-      </div></div>
-    <div class="card"><h2>By Requesting Contractor</h2>
-      <p style="font-size:11.5px;color:var(--muted);margin-top:-6px;">Who asked for the scaffold that has since come down.</p>
-      <div id="histByContractor"></div></div>
-    <div class="card"><h2 id="histTableTitle">Closed Scaffolds</h2>
-      <p style="font-size:11.5px;color:var(--muted);margin-top:-6px;">Newest erect date first. Search by tag, location, contractor or trade.</p>
-      <input id="histSearch" class="input" type="search" placeholder="Search closed scaffolds…"
+      </div>
+      </div>
+    </details>
+
+    <details class="card fold" id="fold-hist-contractor">
+      <summary><h2>By Requesting Contractor</h2></summary>
+      <div class="fold-body">
+      <p class="fold-sub">Who asked for the scaffold that has since come down.</p>
+      <div id="histByContractor"></div>
+      </div>
+    </details>
+
+    <!-- 2 ................................. CLOSED, ENTIRE SITE -->
+    <details class="card fold" id="fold-hist-closed">
+      <summary><h2 id="histTableTitle">Closed Scaffolds &mdash; Entire Site</h2></summary>
+      <div class="fold-body">
+      <p class="fold-sub" id="histTableSub">Newest erect date first. Search by tag, location, contractor or trade.</p>
+      <input id="histSearch" class="input" type="search" placeholder="Search closed scaffolds&hellip;"
              oninput="histSearchChanged(this.value)" style="max-width:340px;margin-bottom:10px;">
       <div class="table-wrap"><table class="data-table">
         <thead><tr><th>Tag</th><th>Building</th><th>Sub Area</th><th>Work Location</th>
           <th>Trade</th><th>Requested By</th><th>Erected</th><th>Outcome</th></tr></thead>
         <tbody id="histTable"></tbody></table></div>
-      <div id="histPager"></div></div>
+      <div id="histPager"></div>
+      </div>
+    </details>
+
+    <!-- 3 ................................. WEEK / MONTH OVER -->
+    <details class="card fold" id="fold-wk" open>
+      <summary><h2 id="wkTitle">Week Over Week</h2></summary>
+      <div class="fold-body">
+      <p class="fold-sub">
+        Drop in each AMECO report as it arrives and this compares any two of them &mdash;
+        what went up, what came down, and whether the rent is rising or falling.
+        The file is read here in your browser; only the summary is saved.
+        Loading a report never changes the live register.</p>
+      <div class="wk-drop" id="wkDrop">
+        <input type="file" id="wkFile" accept=".xlsx" style="display:none"
+               onchange="if(this.files&&this.files[0]){weeklyUploadFile(this.files[0]);this.value='';}">
+        <button type="button" class="btn btn-primary" onclick="document.getElementById('wkFile').click()">
+          Add a report&hellip;</button>
+        <span class="wk-hint">or drag the .xlsx here &middot; the date comes from the file name</span>
+        <div class="wk-msg" id="wkMsg"></div>
+      </div>
+      <div class="wk-modes" id="wkModes"></div>
+      <div id="wkPickers" class="wk-pickers"></div>
+      <div id="wkKpis" class="kpi-row" style="margin-top:14px;"></div>
+      <div id="wkNote"></div>
+      </div>
+    </details>
+
+    <!-- 4 ................................. WHAT MOVED -->
+    <details class="card fold" id="fold-wk-bldg" open>
+      <summary><h2>What Changed, By Building</h2></summary>
+      <div class="fold-body">
+      <p class="fold-sub">Net change is what the count did. Up and Down are the real traffic behind it &mdash; they rarely cancel out.</p>
+      <div class="table-wrap"><table class="data-table">
+        <thead><tr><th>Building</th><th>Was</th><th>Now</th><th>Net</th><th>Went Up</th><th>Came Down</th></tr></thead>
+        <tbody id="wkByBuilding"></tbody></table></div>
+      </div>
+    </details>
+
+    <details class="card fold" id="fold-wk-moved">
+      <summary><h2>The Scaffolds That Moved</h2></summary>
+      <div class="fold-body">
+      <div class="two-col">
+        <div><h3 class="sub-h">Went up in this window</h3><div id="wkAdded"></div></div>
+        <div><h3 class="sub-h">Came down in this window</h3><div id="wkRemoved"></div></div>
+      </div>
+      </div>
+    </details>
+
   </div>
 
   <div id="view-gcarea" class="view">
@@ -4918,6 +4994,7 @@ function init(){
   // point of the public experience.
   showTab(state.currentTab || (visibleTabs()[0] || {id:'request'}).id);
   checkDeepLink();
+  wireFolds();
   wireWeeklyDrop();
 }
 // Deep link support: #scaffold=REQ-1003 in the URL opens that scaffold's
@@ -5660,18 +5737,102 @@ function standingFor(b){
   const recs = state.records.filter(function(r){ return r.tag && !r.dateDismantled; });
   return b === 'ALL' ? recs : recs.filter(function(r){ return r.building === b; });
 }
-/* Which two weeks are being compared. Null = the two most recent. */
+/* Remember which sections were left open, per person, so the page comes
+   back the way they had it rather than resetting every visit. */
+function wireFolds(){
+  const saved = (function(){
+    try { return JSON.parse(localStorage.getItem('sc_folds') || '{}'); }
+    catch(e){ return {}; }
+  })();
+  Array.prototype.forEach.call(document.querySelectorAll('details.fold'), function(d){
+    if(Object.prototype.hasOwnProperty.call(saved, d.id)) d.open = !!saved[d.id];
+    if(d.dataset.foldWired) return;
+    d.dataset.foldWired = '1';
+    d.addEventListener('toggle', function(){
+      let m = {};
+      try { m = JSON.parse(localStorage.getItem('sc_folds') || '{}'); } catch(e){ m = {}; }
+      m[d.id] = d.open;
+      try { localStorage.setItem('sc_folds', JSON.stringify(m)); } catch(e){}
+      /* A chart drawn while its section was shut has no width to lay out
+         against, so redraw the moment it opens. */
+      if(d.open && typeof renderHistory === 'function') renderHistory();
+    });
+  });
+}
+
+/* Which two points are being compared, and whether they are weeks or months. */
 let wkFrom = null, wkTo = null;
+let wkMode = (function(){
+  try { return localStorage.getItem('sc_wkMode') === 'month' ? 'month' : 'week'; }
+  catch(e){ return 'week'; }
+})();
+
+function setWkMode(m){
+  if(m !== 'week' && m !== 'month') return;
+  wkMode = m;
+  try { localStorage.setItem('sc_wkMode', m); } catch(e){}
+  /* The two lists are different sets of dates, so a selection made in one
+     mode is meaningless in the other. Clear and let renderWeekly pick the
+     two most recent. */
+  wkFrom = null; wkTo = null;
+  renderWeekly();
+  if(typeof renderPlanWeekStrip === 'function') renderPlanWeekStrip();
+}
+
+/* A month is represented by the LAST report loaded inside it -- the
+   month-end position. Comparing the first report of each month instead
+   would answer a different and much less useful question. Months with no
+   report simply do not appear; nothing is interpolated. */
+function monthPoints(){
+  const byMonth = {};
+  snapshotsSorted().forEach(function(s){ byMonth[s.date.slice(0,7)] = s; });
+  return Object.keys(byMonth).sort().map(function(k){ return byMonth[k]; });
+}
+
+/* Whichever set the toggle is on. Both are plain snapshot arrays, so
+   diffSnapshots does not care which one it is handed. */
+function wkPoints(){ return wkMode === 'month' ? monthPoints() : snapshotsSorted(); }
+
+function wkLabel(d){
+  if(wkMode !== 'month') return fmtDate(d);
+  const p = String(d).split('-');
+  const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return MON[parseInt(p[1],10)-1] + ' ' + p[0];
+}
 function setWkFrom(v){ wkFrom = v; renderWeekly(); renderPlanWeekStrip(); }
 function setWkTo(v){ wkTo = v; renderWeekly(); renderPlanWeekStrip(); }
 
 function renderWeekly(){
-  const snaps = snapshotsSorted();
+  const snaps = wkPoints();
+  const isMonth = wkMode === 'month';
+  const unit = isMonth ? 'month' : 'week';
+
+  const ttl = document.getElementById('wkTitle');
+  if(ttl) ttl.textContent = isMonth ? 'Month Over Month' : 'Week Over Week';
+
+  /* Month mode is only offered once there are reports in two different
+     months. Showing a dead toggle is worse than not showing it. */
+  const modeEl = document.getElementById('wkModes');
+  if(modeEl){
+    const nMonths = monthPoints().length;
+    modeEl.innerHTML =
+        '<button type="button" class="' + (isMonth ? '' : 'on')
+      + '" onclick="setWkMode(&quot;week&quot;)">Week over week</button>'
+      + '<button type="button" class="' + (isMonth ? 'on' : '')
+      + '" onclick="setWkMode(&quot;month&quot;)"' + (nMonths < 2 ? ' disabled title="Load reports from two different months to compare by month"' : '')
+      + '>Month over month</button>'
+      + '<span class="wk-hint" style="margin-left:10px;">'
+      + snapshotsSorted().length + ' report' + (snapshotsSorted().length===1?'':'s')
+      + ' loaded across ' + nMonths + ' month' + (nMonths===1?'':'s') + '</span>';
+    /* If month mode was saved but there is only one month, fall back
+       rather than showing an empty comparison. */
+    if(isMonth && nMonths < 2){ wkMode = 'week'; renderWeekly(); return; }
+  }
   const pick = document.getElementById('wkPickers');
   const kpis = document.getElementById('wkKpis');
   const note = document.getElementById('wkNote');
   const byB  = document.getElementById('wkByBuilding');
-  const cards = ['wkByBuildingCard','wkListCard'].map(function(id){ return document.getElementById(id); });
+  const cards = ['fold-wk-bldg','fold-wk-moved'].map(function(id){ return document.getElementById(id); });
 
   if(snaps.length < 2){
     if(pick) pick.innerHTML = '';
@@ -5679,8 +5840,8 @@ function renderWeekly(){
     cards.forEach(function(c){ if(c) c.style.display = 'none'; });
     if(note) note.innerHTML = '<div class="notice info" style="margin-top:12px;">'
       + (snaps.length === 1
-         ? '<b>One report loaded (' + fmtDate(snaps[0].date) + ').</b> Add the next week\'s file and this fills in with the comparison.'
-         : '<b>No weekly reports loaded yet.</b> Add two and this shows what changed between them. Old reports work too — every one you add lengthens the trend.')
+         ? '<b>One ' + unit + ' loaded (' + wkLabel(snaps[0].date) + ').</b> Add another report and this fills in with the comparison.'
+         : '<b>No reports loaded yet.</b> Add two and this shows what changed between them. Old reports work too — every one you add lengthens the trend.')
       + '</div>';
     return;
   }
@@ -5695,7 +5856,7 @@ function renderWeekly(){
   }
   const opts = function(sel){
     return dates.map(function(d){
-      return '<option value="' + d + '"' + (d === sel ? ' selected' : '') + '>' + fmtDate(d) + '</option>';
+      return '<option value="' + d + '"' + (d === sel ? ' selected' : '') + '>' + wkLabel(d) + '</option>';
     }).join('');
   };
   pick.innerHTML =
@@ -5703,10 +5864,10 @@ function renderWeekly(){
     + '<select class="input" onchange="setWkFrom(this.value)">' + opts(wkFrom) + '</select>'
     + '<label class="wk-lab">with</label>'
     + '<select class="input" onchange="setWkTo(this.value)">' + opts(wkTo) + '</select>'
-    + '<span class="wk-hint">' + snaps.length + ' report' + (snaps.length===1?'':'s') + ' loaded</span>';
+    + '<span class="wk-hint">' + snaps.length + ' ' + unit + (snaps.length===1?'':'s') + ' to choose from</span>';
 
-  const prev = snaps.filter(function(s){ return s.date === wkFrom; })[0];
-  const curr = snaps.filter(function(s){ return s.date === wkTo;   })[0];
+  const prev = snaps.filter(function(x){ return x.date === wkFrom; })[0];
+  const curr = snaps.filter(function(x){ return x.date === wkTo;   })[0];
   const d = diffSnapshots(prev, curr);
   if(!d) return;
 
@@ -5869,8 +6030,23 @@ function renderHistory(){
               + h.discipline + ' ' + h.requestor).toLowerCase().indexOf(q) >= 0;
     }) : rows).slice().sort(function(a,b){ return String(b.erect||'').localeCompare(String(a.erect||'')); });
 
+  /* He asked for this section by the name "closed scaffolds, entire site".
+     The building tabs still filter it, so when they are on, say plainly
+     what is being shown AND what the site total is -- a filtered count
+     read as a site count is exactly the kind of quiet mistake that makes
+     someone stop trusting the page. */
+  const siteClosed = historyAll().filter(function(h){ return h.outcome === 'Dismantled'; }).length;
+  const siteAll = historyAll().length;
   document.getElementById('histTableTitle').textContent =
     'Closed Scaffolds — ' + (histBldg === 'ALL' ? 'Entire Site' : histBldg);
+  const sub = document.getElementById('histTableSub');
+  if(sub){
+    sub.innerHTML = (histBldg === 'ALL'
+        ? '<b>' + siteAll + '</b> closed-out records across the whole site (' + siteClosed + ' dismantled). '
+        : 'Showing <b>' + rows.length + '</b> in ' + histBldg
+          + '. Entire site: <b>' + siteAll + '</b> (' + siteClosed + ' dismantled). ')
+      + 'Newest erect date first. Search by tag, location, contractor or trade.';
+  }
   const pg = pageSlice('hist', filtered.map(function(h){
     return '<tr><td><b>' + h.tag + '</b></td><td>' + h.building + '</td><td>' + (h.subArea||'—')
       + '</td><td>' + (h.loc||'—') + '</td><td>' + (h.discipline||'—') + '</td><td>' + (h.requestor||'—')
@@ -7274,7 +7450,7 @@ function gotoWeekOverWeek(){
 function renderPlanWeekStrip(){
   const el = document.getElementById('planWeekStrip');
   if(!el) return;
-  const snaps = (typeof snapshotsSorted === 'function') ? snapshotsSorted() : [];
+  const snaps = (typeof wkPoints === 'function') ? wkPoints() : [];
   if(snaps.length < 2){ el.innerHTML = ''; el.style.display = 'none'; return; }
 
   /* Follow the same two weeks the Week Over Week tab is showing, so the
@@ -7313,7 +7489,7 @@ function renderPlanWeekStrip(){
 
   el.style.display = '';
   el.innerHTML = '<div class="pw-strip">'
-    + '<span class="pw-when">' + fmtDate(from) + ' → ' + fmtDate(to) + '</span>'
+    + '<span class="pw-when">' + wkLabel(from) + ' → ' + wkLabel(to) + '</span>'
     + '<span class="pw-cell"><b>' + b.now + '</b> standing ' + cnt(b.net, true) + '</span>'
     + '<span class="pw-cell pw-up">' + b.added + ' went up</span>'
     + '<span class="pw-cell pw-down">' + b.removed + ' came down</span>'
