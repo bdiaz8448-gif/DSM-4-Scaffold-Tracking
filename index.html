@@ -494,6 +494,26 @@ tr.stage-live{background:transparent;}
 .sub-h{font-size:var(--fs-3xs);color:var(--muted);font-weight:var(--fw-medium);
   text-transform:uppercase;letter-spacing:.08em;margin:0 0 var(--sp-2);}
 .two-col{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-5);}
+/* Weekly report intake. The drop zone reads as a place to put something
+   even before you know what it wants. */
+.wk-drop{display:flex;align-items:center;gap:var(--sp-3);flex-wrap:wrap;margin-top:var(--sp-3);
+  padding:var(--sp-4);border:1.5px dashed var(--border-strong);border-radius:var(--r-md);
+  background:var(--gray-bg);transition:border-color .15s ease,background .15s ease;}
+.wk-drop.drag{border-color:var(--accent);background:var(--accent-soft);}
+.wk-hint{font-size:var(--fs-3xs);color:var(--muted);}
+.wk-msg{flex:1 1 100%;font-size:var(--fs-2xs);font-weight:var(--fw-medium);color:var(--muted);min-height:16px;}
+.wk-msg.ok{color:var(--green);} .wk-msg.err{color:var(--red);}
+.wk-pickers{display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap;margin-top:var(--sp-4);}
+.wk-pickers .input{max-width:190px;}
+.wk-lab{font-size:var(--fs-3xs);color:var(--muted);font-weight:var(--fw-medium);
+  text-transform:uppercase;letter-spacing:.08em;}
+.wk-row{padding:var(--sp-1) 0;font-size:var(--fs-2xs);border-bottom:1px solid var(--border);}
+.wk-row:last-child{border-bottom:none;}
+.wk-tag{display:inline-block;min-width:46px;font-weight:var(--fw-bold);
+  padding:1px var(--sp-1);border-radius:var(--r-sm);}
+.wk-tag.up{background:var(--red-bg);color:var(--red);}
+.wk-tag.down{background:var(--green-bg);color:var(--green);}
+.wk-where{color:var(--muted);}
 @media (max-width:760px){ .two-col{grid-template-columns:1fr;} }
 .chip{display:inline-flex;align-items:center;gap:var(--sp-1);background:var(--gray-bg);border:1px solid var(--border);
   border-radius:var(--r-pill);padding:var(--sp-1) var(--sp-2);font-size:var(--fs-2xs);font-weight:var(--fw-medium);}
@@ -1678,6 +1698,34 @@ footer{text-align:center;color:#9aa3af;font-size:var(--fs-2xs);margin-top:30px;p
   </div>
 
   <div id="view-history" class="view">
+    <div class="card">
+      <h2>Week Over Week</h2>
+      <p style="font-size:11.5px;color:var(--muted);margin-top:-6px;">
+        Drop in each AMECO weekly report as it arrives and this compares any two of them —
+        what went up, what came down, and whether the rent is rising or falling.
+        The file is read here in your browser; only the summary is saved.</p>
+      <div class="wk-drop" id="wkDrop">
+        <input type="file" id="wkFile" accept=".xlsx" style="display:none"
+               onchange="if(this.files&&this.files[0]){weeklyUploadFile(this.files[0]);this.value='';}">
+        <button type="button" class="btn btn-primary" onclick="document.getElementById('wkFile').click()">
+          Add a weekly report&hellip;</button>
+        <span class="wk-hint">or drag the .xlsx here &middot; the date comes from the file name</span>
+        <div class="wk-msg" id="wkMsg"></div>
+      </div>
+      <div id="wkPickers" class="wk-pickers"></div>
+      <div id="wkKpis" class="kpi-row" style="margin-top:14px;"></div>
+      <div id="wkNote"></div>
+    </div>
+    <div class="card" id="wkByBuildingCard"><h2>What Changed, By Building</h2>
+      <p style="font-size:11.5px;color:var(--muted);margin-top:-6px;">Net change is what the count did. Up and Down are the real traffic behind it — they rarely cancel out.</p>
+      <div class="table-wrap"><table class="data-table">
+        <thead><tr><th>Building</th><th>Was</th><th>Now</th><th>Net</th><th>Went Up</th><th>Came Down</th></tr></thead>
+        <tbody id="wkByBuilding"></tbody></table></div></div>
+    <div class="card" id="wkListCard"><h2>The Scaffolds That Moved</h2>
+      <div class="two-col">
+        <div><h3 class="sub-h">Went up in this window</h3><div id="wkAdded"></div></div>
+        <div><h3 class="sub-h">Came down in this window</h3><div id="wkRemoved"></div></div>
+      </div></div>
     <div class="card">
       <h2>Scaffold History — Every Scaffold Ever Built</h2>
       <p style="font-size:11.5px;color:var(--muted);margin-top:-6px;">
@@ -3214,6 +3262,9 @@ function fmtDate(s){ if(!s) return '—'; const d=parseDate(s); return d.toLocal
 function loadState(){
   const defaults = {
     records: JSON.parse(JSON.stringify(SEED.records)),
+    /* One entry per AMECO weekly report that has been uploaded.
+       Kept in state (not SEED) because it grows every week. */
+    snapshots: JSON.parse(JSON.stringify(SEED.snapshots || [])),
     notifications: JSON.parse(JSON.stringify(SEED.notifications)),
     directory: JSON.parse(JSON.stringify(SEED.directory)),
     nextNum: 2003,
@@ -5111,6 +5162,406 @@ function renderCurrent(){
   else if(id==='foreman') renderForemanArea();
 }
 
+/* ============================================================
+   XLSX READER  --  no library, no CDN, works offline
+   ============================================================
+   The app ships as ONE self-contained HTML file that has to work
+   on a site laptop with a bad connection. Pulling SheetJS off a
+   CDN would break that the first time the wifi drops, and it puts
+   a third-party script in the page that reads FUJIFILM data.
+
+   An .xlsx is a ZIP of XML. Everything needed is native now:
+     - DataView          -> read the ZIP central directory
+     - DecompressionStream('deflate-raw') -> inflate each entry
+     - DOMParser         -> read the sheet XML
+
+   Reads only what the AURA weekly report needs: the shared string
+   table and one named worksheet, as an array of row arrays.
+   ============================================================ */
+
+async function xlsxInflate(bytes, method){
+  if(method === 0) return bytes;                    // stored, not compressed
+  const ds = new DecompressionStream('deflate-raw');
+  const stream = new Blob([bytes]).stream().pipeThrough(ds);
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+/* Walk the ZIP end-of-central-directory back to the file table.
+   Reading the central directory (not scanning local headers) is what
+   makes this safe on files where an entry's local header omits sizes. */
+async function xlsxEntries(buf){
+  const dv = new DataView(buf), u8 = new Uint8Array(buf);
+  let eocd = -1;
+  for(let i = u8.length - 22; i >= 0 && i > u8.length - 66000; i--){
+    if(dv.getUint32(i, true) === 0x06054b50){ eocd = i; break; }
+  }
+  if(eocd < 0) throw new Error('Not a valid .xlsx file (no ZIP directory found).');
+  const count = dv.getUint16(eocd + 10, true);
+  let p = dv.getUint32(eocd + 16, true);
+  const out = {};
+  for(let i = 0; i < count; i++){
+    if(dv.getUint32(p, true) !== 0x02014b50) break;
+    const method  = dv.getUint16(p + 10, true);
+    const csize   = dv.getUint32(p + 20, true);
+    const nameLen = dv.getUint16(p + 28, true);
+    const extraLen= dv.getUint16(p + 30, true);
+    const cmtLen  = dv.getUint16(p + 32, true);
+    const lho     = dv.getUint32(p + 42, true);
+    const name    = new TextDecoder().decode(u8.subarray(p + 46, p + 46 + nameLen));
+    // The local header repeats name/extra with its OWN lengths.
+    const lNameLen  = dv.getUint16(lho + 26, true);
+    const lExtraLen = dv.getUint16(lho + 28, true);
+    const start = lho + 30 + lNameLen + lExtraLen;
+    out[name] = { method: method, bytes: u8.subarray(start, start + csize) };
+    p += 46 + nameLen + extraLen + cmtLen;
+  }
+  return out;
+}
+
+async function xlsxText(entries, path){
+  const e = entries[path];
+  if(!e) return null;
+  return new TextDecoder().decode(await xlsxInflate(e.bytes, e.method));
+}
+
+/* Excel dates are days since 1899-12-30 (its leap-year bug included). */
+function xlsxSerialToISO(n){
+  if(!isFinite(n) || n <= 0) return null;
+  const ms = Math.round((n - 25569) * 86400000);
+  const d = new Date(ms);
+  if(isNaN(d.getTime()) || d.getFullYear() < 2000 || d.getFullYear() > 2100) return null;
+  return d.toISOString().slice(0, 10);
+}
+
+function xlsxColToIndex(ref){            // "BC12" -> 54
+  let n = 0;
+  for(let i = 0; i < ref.length; i++){
+    const c = ref.charCodeAt(i);
+    if(c < 65 || c > 90) break;
+    n = n * 26 + (c - 64);
+  }
+  return n - 1;
+}
+
+/* Returns rows as arrays, 0-indexed by column. Dates come back as
+   'YYYY-MM-DD' strings, numbers as numbers, everything else as text. */
+async function xlsxReadSheet(fileBuf, sheetName){
+  const entries = await xlsxEntries(fileBuf);
+
+  const wbXml = await xlsxText(entries, 'xl/workbook.xml');
+  if(!wbXml) throw new Error('That file is not an .xlsx workbook.');
+  const relXml = await xlsxText(entries, 'xl/_rels/workbook.xml.rels') || '';
+  const doc = new DOMParser().parseFromString(wbXml, 'application/xml');
+
+  let rid = null, names = [];
+  Array.prototype.forEach.call(doc.getElementsByTagName('sheet'), function(s){
+    const nm = s.getAttribute('name');
+    names.push(nm);
+    if(nm && nm.trim().toLowerCase() === String(sheetName).trim().toLowerCase()){
+      rid = s.getAttribute('r:id') || s.getAttributeNS(
+        'http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id');
+    }
+  });
+  if(!rid){
+    const e = new Error('This workbook has no "' + sheetName + '" tab. It has: ' + names.join(', '));
+    e.sheetNames = names; throw e;
+  }
+  const relDoc = new DOMParser().parseFromString(relXml, 'application/xml');
+  let target = null;
+  Array.prototype.forEach.call(relDoc.getElementsByTagName('Relationship'), function(r){
+    if(r.getAttribute('Id') === rid) target = r.getAttribute('Target');
+  });
+  if(!target) throw new Error('Could not locate the "' + sheetName + '" tab inside the file.');
+  target = String(target).replace(/^\/?xl\//, '').replace(/^\//, '');
+
+  // Shared strings: Excel stores most text once and references it by index.
+  const sstXml = await xlsxText(entries, 'xl/sharedStrings.xml');
+  const sst = [];
+  if(sstXml){
+    const sd = new DOMParser().parseFromString(sstXml, 'application/xml');
+    Array.prototype.forEach.call(sd.getElementsByTagName('si'), function(si){
+      let s = '';
+      Array.prototype.forEach.call(si.getElementsByTagName('t'), function(t){ s += t.textContent; });
+      sst.push(s);
+    });
+  }
+
+  const shXml = await xlsxText(entries, 'xl/' + target);
+  if(!shXml) throw new Error('The "' + sheetName + '" tab could not be read.');
+  const sd = new DOMParser().parseFromString(shXml, 'application/xml');
+
+  /* Excel omits empty rows entirely, so the Nth <row> element is NOT
+     necessarily spreadsheet row N. Index by the row's own r attribute
+     or the header lands in the wrong place and real rows get sliced off
+     the front -- which is exactly how this first read came back 3 rows
+     short on both files. */
+  const rows = [];
+  Array.prototype.forEach.call(sd.getElementsByTagName('row'), function(row){
+    const rowNum = parseInt(row.getAttribute('r'), 10);
+    const cells = [];
+    Array.prototype.forEach.call(row.getElementsByTagName('c'), function(c){
+      const idx = xlsxColToIndex(c.getAttribute('r') || '');
+      const type = c.getAttribute('t');
+      const style = c.getAttribute('s');
+      let v = null;
+      if(type === 'inlineStr'){
+        const is = c.getElementsByTagName('t');
+        v = is.length ? is[0].textContent : '';
+      } else {
+        const vs = c.getElementsByTagName('v');
+        const raw = vs.length ? vs[0].textContent : null;
+        if(raw === null || raw === '') v = null;
+        else if(type === 's') v = sst[parseInt(raw, 10)] !== undefined ? sst[parseInt(raw, 10)] : '';
+        else if(type === 'str' || type === 'e') v = raw;
+        else {
+          const num = parseFloat(raw);
+          // A date is a number wearing a date format. The AURA report's
+          // only date columns sit past column 6, and a scaffold count
+          // would never land in the 40000-46000 serial range, so treat
+          // that band as a date and everything else as a plain number.
+          v = (isFinite(num) && style !== null && num > 40000 && num < 60000 &&
+               xlsxSerialToISO(num)) ? xlsxSerialToISO(num) : num;
+        }
+      }
+      if(idx >= 0) cells[idx] = v;
+    });
+    if(rowNum > 0) rows[rowNum - 1] = cells; else rows.push(cells);
+  });
+  for(let i = 0; i < rows.length; i++) if(!rows[i]) rows[i] = [];
+  return rows;
+}
+
+
+/* ================= WEEKLY SNAPSHOTS =================
+   AMECO sends a report every week. One report tells you what is
+   standing today; two tell you which direction the job is going,
+   and that is the number worth acting on.
+
+   The 27 Jul -> 10 Aug pair makes the point: standing count fell by
+   8, and the daily burn went UP $245. Fewer scaffolds, more money,
+   because the ones that stayed kept ageing past the free window.
+   Nobody reads that off a single week's sheet.
+
+   A snapshot is one report reduced to what a comparison needs: the
+   tag set (so new/removed is exact, not inferred from counts) plus
+   the totals. ~250 tags is about 12 KB, so a year of weeks is a few
+   hundred KB -- one Firestore doc per week, never a growing blob.
+   ==================================================== */
+
+/* Column map for the AURA weekly report's Standing Scaffold tab.
+   Header is row 5, data starts row 6. Kept here as names so a
+   column moving is a one-line fix rather than a hunt for r[15]. */
+const WK_COL = { tag:1, contractor:2, rework:3, area:4, subArea:5, loc:6,
+                 erect:7, daysStanding:8, rate:15, discipline:22 };
+
+function wkNorm(s){ return String(s == null ? '' : s).replace(/\s+/g,' ').trim(); }
+function wkTitle(s){
+  s = wkNorm(s);
+  return s ? s.toLowerCase().replace(/\w/g, function(c){ return c.toUpperCase(); }) : '';
+}
+/* Building names in the sheet are shouted (HEADBLOCK 2, TANK FARM).
+   Map them to what the app calls them so a snapshot's per-building
+   counts line up with the register instead of splitting in two. */
+const WK_BUILDING = { 'HEADBLOCK 2':'HB2', 'TANK FARM':'Tank Farm', 'SPINE':'Spine',
+  'SITE':'Site', 'WAREHOUSE':'Warehouse', 'CUB EXPANSION':'CUB Expansion', 'CUB':'CUB',
+  'DPFG':'DPFG', 'DPFQ':'DPFG', 'DSM1':'DSM1', 'DSM2':'DSM2', 'DSM3':'DSM3', 'DSM4':'DSM4' };
+function wkBuilding(a){
+  a = wkNorm(a);
+  return WK_BUILDING[a.toUpperCase()] || a;
+}
+
+/* Turn parsed rows into a snapshot. asOf is the report date, which
+   drives the age maths -- NOT today, or reopening an old report would
+   silently re-bill it at today's clock. */
+function snapshotFromRows(rows, asOf){
+  const snap = new Date(asOf + 'T00:00:00');
+  const tags = {};
+  let standing = 0, onRent = 0, burn = 0, accrued = 0;
+  const buildings = {};
+  for(let i = 5; i < rows.length; i++){
+    const r = rows[i];
+    if(!r || r[WK_COL.tag] == null || !wkNorm(r[WK_COL.tag])) continue;
+    const tag = wkNorm(r[WK_COL.tag]);
+    const b = wkBuilding(r[WK_COL.area]) || 'Not stated';
+    const erect = typeof r[WK_COL.erect] === 'string' ? r[WK_COL.erect] : null;
+    const rate = typeof r[WK_COL.rate] === 'number' ? r[WK_COL.rate] : 0;
+    let billable = 0;
+    if(erect){
+      const days = Math.round((snap - new Date(erect + 'T00:00:00')) / 86400000);
+      billable = Math.max(0, days - STANDING_LIMIT_DAYS);
+    }
+    tags[tag] = { b: b, e: erect, r: rate,
+                  s: wkNorm(r[WK_COL.subArea]), l: wkNorm(r[WK_COL.loc]),
+                  d: wkTitle(r[WK_COL.discipline]),
+                  q: wkTitle(r[WK_COL.rework] || r[WK_COL.contractor]) };
+    standing++;
+    buildings[b] = (buildings[b] || 0) + 1;
+    if(billable > 0){ onRent++; burn += rate; accrued += rate * billable; }
+  }
+  return { date: asOf, standing: standing, onRent: onRent,
+           burn: Math.round(burn * 100) / 100,
+           accrued: Math.round(accrued * 100) / 100,
+           buildings: buildings, tags: tags };
+}
+
+/* What changed between two snapshots. Compares TAG SETS, not counts --
+   a week where 20 went up and 20 came down nets to zero and would look
+   like nothing happened. */
+function diffSnapshots(prev, curr){
+  if(!prev || !curr) return null;
+  const pt = prev.tags || {}, ct = curr.tags || {};
+  const added = [], removed = [], stayed = [];
+  Object.keys(ct).forEach(function(t){ (pt[t] ? stayed : added).push(t); });
+  Object.keys(pt).forEach(function(t){ if(!ct[t]) removed.push(t); });
+
+  const names = {};
+  Object.keys(prev.buildings || {}).forEach(function(b){ names[b] = 1; });
+  Object.keys(curr.buildings || {}).forEach(function(b){ names[b] = 1; });
+  const perBuilding = Object.keys(names).map(function(b){
+    const was = (prev.buildings || {})[b] || 0, now = (curr.buildings || {})[b] || 0;
+    return { building: b, was: was, now: now, net: now - was,
+             added:   added.filter(function(t){ return ct[t].b === b; }).length,
+             removed: removed.filter(function(t){ return pt[t].b === b; }).length };
+  }).sort(function(a, b){ return Math.abs(b.net) - Math.abs(a.net) || b.now - a.now; });
+
+  const days = Math.round((new Date(curr.date + 'T00:00:00') -
+                           new Date(prev.date + 'T00:00:00')) / 86400000);
+  return {
+    from: prev.date, to: curr.date, days: days,
+    added: added, removed: removed, stayed: stayed,
+    standingDelta: curr.standing - prev.standing,
+    onRentDelta:   curr.onRent   - prev.onRent,
+    burnDelta:     Math.round((curr.burn - prev.burn) * 100) / 100,
+    accruedDelta:  Math.round((curr.accrued - prev.accrued) * 100) / 100,
+    perBuilding: perBuilding
+  };
+}
+
+function snapshotsSorted(){
+  return (state.snapshots || []).slice().sort(function(a, b){
+    return String(a.date).localeCompare(String(b.date));
+  });
+}
+
+/* The report date drives every age and money figure, so it must come
+   from the report, not from the day somebody got round to uploading it.
+   The filename carries it ("...10AUG2026.xlsx"); if it doesn't, we ask
+   rather than guess. */
+const WK_MONTHS = {JAN:'01',FEB:'02',MAR:'03',APR:'04',MAY:'05',JUN:'06',
+                   JUL:'07',AUG:'08',SEP:'09',OCT:'10',NOV:'11',DEC:'12'};
+function wkDateFromFilename(name){
+  const n = String(name || '').toUpperCase();
+  let m = n.match(/(\d{1,2})\s*(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[A-Z]*\s*(\d{4})/);
+  if(m) return m[3] + '-' + WK_MONTHS[m[2]] + '-' + String(m[1]).padStart(2,'0');
+  m = n.match(/(\d{4})[.\-_](\d{2})[.\-_](\d{2})/);          // 2026.02.02
+  if(m) return m[1] + '-' + m[2] + '-' + m[3];
+  m = n.match(/(\d{1,2})[.\-_](\d{1,2})[.\-_](\d{4})/);      // 7.25.2026
+  if(m) return m[3] + '-' + String(m[1]).padStart(2,'0') + '-' + String(m[2]).padStart(2,'0');
+  return null;
+}
+
+let _wkPending = null;   // parsed snapshot awaiting nothing -- kept for the message
+
+/* Read a dropped weekly report and fold it in. Everything happens in the
+   browser: the file is never uploaded anywhere, only the summary is saved. */
+async function weeklyUploadFile(file){
+  const msg = document.getElementById('wkMsg');
+  const say = function(t, cls){ if(msg){ msg.textContent = t; msg.className = 'wk-msg ' + (cls||''); } };
+  if(!file) return;
+  try {
+    say('Reading ' + file.name + '…');
+    const asOf = wkDateFromFilename(file.name);
+    if(!asOf){
+      say('Could not read the report date from the file name. Rename it to include the date, e.g. "AURA WEEKLY SCAFFOLD REPORT 17AUG2026.xlsx", then try again.', 'err');
+      return;
+    }
+    const buf = await file.arrayBuffer();
+    const rows = await xlsxReadSheet(buf, 'Standing Scaffold');
+    const snap = snapshotFromRows(rows, asOf);
+    if(!snap.standing){
+      say('That Standing Scaffold tab has no scaffold rows in it.', 'err');
+      return;
+    }
+    _wkPending = snap;
+
+    const before = (state.snapshots || []).filter(function(s){ return s.date !== asOf; });
+    const replaced = before.length !== (state.snapshots || []).length;
+    state.snapshots = before.concat([snap]);
+
+    /* BDiaz chose: the newest report becomes the live register. Apply it
+       only when this really is the newest, so re-uploading an old week to
+       fill in the trend cannot roll the register backwards. */
+    const all = snapshotsSorted();
+    let applied = null;
+    if(all.length && all[all.length - 1].date === asOf) applied = applyWeeklyToRegister(snap);
+
+    saveState();
+    renderAll();
+    if(typeof renderHistory === 'function') { try { renderHistory(); } catch(e){} }
+
+    let note = (replaced ? 'Replaced' : 'Added') + ' the ' + fmtDate(asOf) + ' report — '
+             + snap.standing + ' standing, ' + fmtMoney(snap.burn) + '/day.';
+    if(applied) note += ' Register updated: ' + applied.added + ' new, '
+                      + applied.closed + ' moved to history.';
+    else if(all.length > 1) note += ' Kept for the trend; the register still follows '
+                      + fmtDate(all[all.length-1].date) + '.';
+    say(note, 'ok');
+  } catch(e){
+    say(e && e.message ? e.message : 'That file could not be read.', 'err');
+  }
+}
+
+/* Make the live register match the newest report: add scaffolds that
+   appeared, retire ones that are gone, refresh rate and location on the
+   rest. Pins and every hand-entered field on a surviving scaffold are
+   left alone -- the report has no idea where a pin was dropped. */
+function applyWeeklyToRegister(snap){
+  const inReport = snap.tags || {};
+  let added = 0, closed = 0, updated = 0;
+  const today = todayStr();
+
+  state.records.forEach(function(r){
+    if(!r.tag) return;
+    const t = inReport[r.tag];
+    if(t){
+      if(t.r && r.dailyRentalRate !== t.r){ r.dailyRentalRate = t.r; updated++; }
+      if(t.s && !r.subArea) r.subArea = t.s;
+      if(t.e && !r.dateBuilt) r.dateBuilt = t.e;
+    } else if(!r.dateDismantled){
+      /* Gone from the standing report means it came down. The report has
+         no takedown date, so record the report date and say why. */
+      r.dateDismantled = snap.date;
+      r.status = 'Dismantled';
+      r.history = (r.history || []).concat([{ date: snap.date,
+        event: 'Off the AMECO standing report',
+        actor: 'Weekly report ' + fmtDate(snap.date),
+        note: 'No longer listed as standing. AMECO does not give a takedown date, so this is the report date.' }]);
+      closed++;
+    }
+  });
+
+  const known = {};
+  state.records.forEach(function(r){ if(r.tag) known[r.tag] = 1; });
+  Object.keys(inReport).forEach(function(tag){
+    if(known[tag]) return;
+    const t = inReport[tag];
+    state.records.push({
+      id: 'wk-' + tag, tag: tag, type: 'Build', status: 'Built',
+      building: t.b, floor: (state.buildingFloors[t.b] || ['General Area'])[0],
+      subArea: t.s, room: t.l, loc: t.l, discipline: t.d || 'Other',
+      requestor: { name: t.q || 'Not stated', company: t.q || 'Not stated' },
+      builderCompany: 'AMECO', dailyRentalRate: t.r,
+      dateRequested: t.e, dateApproved: t.e, dateBuilt: t.e,
+      pin: null, gridRef: '',
+      hw: 'Came in on the ' + fmtDate(snap.date) + ' weekly report. No pin yet — drop one on the floor plan when known.',
+      history: [{ date: snap.date, event: 'Appeared on the AMECO standing report',
+                  actor: 'Weekly report ' + fmtDate(snap.date), note: '' }]
+    });
+    added++;
+  });
+  return { added: added, closed: closed, updated: updated };
+}
+
 /* ---------------- HISTORY ----------------
    Every scaffold AMECO has ever erected on this site: 1,317 that have
    come down, plus the ones still up, per building.
@@ -5144,7 +5595,115 @@ function standingFor(b){
   const recs = state.records.filter(function(r){ return r.tag && !r.dateDismantled; });
   return b === 'ALL' ? recs : recs.filter(function(r){ return r.building === b; });
 }
+/* Which two weeks are being compared. Null = the two most recent. */
+let wkFrom = null, wkTo = null;
+function setWkFrom(v){ wkFrom = v; renderWeekly(); }
+function setWkTo(v){ wkTo = v; renderWeekly(); }
+
+function renderWeekly(){
+  const snaps = snapshotsSorted();
+  const pick = document.getElementById('wkPickers');
+  const kpis = document.getElementById('wkKpis');
+  const note = document.getElementById('wkNote');
+  const byB  = document.getElementById('wkByBuilding');
+  const cards = ['wkByBuildingCard','wkListCard'].map(function(id){ return document.getElementById(id); });
+
+  if(snaps.length < 2){
+    if(pick) pick.innerHTML = '';
+    if(kpis) kpis.innerHTML = '';
+    cards.forEach(function(c){ if(c) c.style.display = 'none'; });
+    if(note) note.innerHTML = '<div class="notice info" style="margin-top:12px;">'
+      + (snaps.length === 1
+         ? '<b>One report loaded (' + fmtDate(snaps[0].date) + ').</b> Add the next week\'s file and this fills in with the comparison.'
+         : '<b>No weekly reports loaded yet.</b> Add two and this shows what changed between them. Old reports work too — every one you add lengthens the trend.')
+      + '</div>';
+    return;
+  }
+  cards.forEach(function(c){ if(c) c.style.display = ''; });
+  if(note) note.innerHTML = '';
+
+  const dates = snaps.map(function(s){ return s.date; });
+  if(dates.indexOf(wkTo)   < 0) wkTo   = dates[dates.length - 1];
+  if(dates.indexOf(wkFrom) < 0 || wkFrom >= wkTo){
+    const i = dates.indexOf(wkTo);
+    wkFrom = dates[Math.max(0, i - 1)];
+  }
+  const opts = function(sel){
+    return dates.map(function(d){
+      return '<option value="' + d + '"' + (d === sel ? ' selected' : '') + '>' + fmtDate(d) + '</option>';
+    }).join('');
+  };
+  pick.innerHTML =
+      '<label class="wk-lab">Compare</label>'
+    + '<select class="input" onchange="setWkFrom(this.value)">' + opts(wkFrom) + '</select>'
+    + '<label class="wk-lab">with</label>'
+    + '<select class="input" onchange="setWkTo(this.value)">' + opts(wkTo) + '</select>'
+    + '<span class="wk-hint">' + snaps.length + ' report' + (snaps.length===1?'':'s') + ' loaded</span>';
+
+  const prev = snaps.filter(function(s){ return s.date === wkFrom; })[0];
+  const curr = snaps.filter(function(s){ return s.date === wkTo;   })[0];
+  const d = diffSnapshots(prev, curr);
+  if(!d) return;
+
+  /* Fewer scaffolds is good; more money is not. Colour by what the number
+     MEANS, not by its sign -- a falling count next to a rising burn is the
+     whole point of this page and must not both read as green. */
+  const delta = function(label, val, fmt, goodWhenDown, sub){
+    const good = goodWhenDown ? val < 0 : val > 0;
+    const flat = val === 0;
+    const col = flat ? 'var(--muted)' : (good ? 'var(--green)' : 'var(--red)');
+    const sign = val > 0 ? '+' : '';
+    return '<div class="kpi"><div class="label">' + label + '</div>'
+         + '<div class="value" style="color:' + col + ';">' + sign + fmt(val) + '</div>'
+         + '<div class="kpi-note">' + sub + '</div></div>';
+  };
+  const num = function(v){ return String(v); };
+  kpis.innerHTML =
+      delta('Standing', d.standingDelta, num, true,
+            prev.standing + ' \u2192 ' + curr.standing + ' over ' + d.days + ' days')
+    + delta('Rent Per Day', d.burnDelta, fmtMoney, true,
+            fmtMoney(prev.burn) + ' \u2192 ' + fmtMoney(curr.burn))
+    + delta('On Rent', d.onRentDelta, num, true,
+            prev.onRent + ' \u2192 ' + curr.onRent + ' past the free window')
+    + '<div class="kpi"><div class="label">Went Up / Came Down</div><div class="value">'
+      + d.added.length + ' / ' + d.removed.length + '</div>'
+      + '<div class="kpi-note">' + d.stayed.length + ' stayed up throughout</div></div>';
+
+  /* The insight this whole page exists for. Only say it when it is true. */
+  if(d.standingDelta < 0 && d.burnDelta > 0){
+    note.innerHTML = '<div class="notice warn" style="margin-top:12px;">'
+      + '<b>Fewer scaffolds, more rent.</b> The count fell by ' + Math.abs(d.standingDelta)
+      + ' but the daily bill rose ' + fmtMoney(d.burnDelta)
+      + '. The ones that stayed kept ageing past their free window, and that costs more than the ones that came down were saving.</div>';
+  } else if(d.standingDelta > 0 && d.burnDelta < 0){
+    note.innerHTML = '<div class="notice info" style="margin-top:12px;">'
+      + '<b>More scaffolds, less rent.</b> ' + d.standingDelta + ' more standing but '
+      + fmtMoney(Math.abs(d.burnDelta)) + '/day cheaper — the expensive long-standing ones came down.</div>';
+  }
+
+  byB.innerHTML = d.perBuilding.map(function(b){
+    const col = b.net === 0 ? 'var(--muted)' : (b.net < 0 ? 'var(--green)' : 'var(--red)');
+    return '<tr><td><b>' + b.building + '</b></td><td>' + b.was + '</td><td>' + b.now + '</td>'
+      + '<td style="color:' + col + ';font-weight:var(--fw-bold);">' + (b.net > 0 ? '+' : '') + b.net + '</td>'
+      + '<td>' + (b.added   ? '<span style="color:var(--red);">' + b.added + '</span>'   : '0') + '</td>'
+      + '<td>' + (b.removed ? '<span style="color:var(--green);">' + b.removed + '</span>' : '0') + '</td></tr>';
+  }).join('') || '<tr><td colspan="6"><div class="empty">No buildings in either report.</div></td></tr>';
+
+  const listOf = function(tags, src, cls){
+    if(!tags.length) return '<div class="empty">None.</div>';
+    return tags.slice().sort().map(function(t){
+      const v = (src.tags || {})[t] || {};
+      return '<div class="wk-row"><span class="wk-tag ' + cls + '">' + t + '</span> '
+        + '<span class="wk-where">' + (v.b || '—') + (v.s ? ' · ' + v.s : '')
+        + (v.l ? ' · ' + v.l : '') + '</span></div>';
+    }).join('');
+  };
+  document.getElementById('wkAdded').innerHTML   = listOf(d.added, curr, 'up');
+  document.getElementById('wkRemoved').innerHTML = listOf(d.removed, prev, 'down');
+}
+
 function renderHistory(){
+  renderWeekly();
   const all = historyAll();
 
   /* An empty history means one of two very different things: this site has
@@ -6497,6 +7056,20 @@ function wizCancel(){
   state.wiz = null;
   saveState();
   toast('Request cancelled — nothing was submitted');
+  (function(){
+    const z = document.getElementById('wkDrop');
+    if(!z) return;
+    ['dragenter','dragover'].forEach(function(ev){
+      z.addEventListener(ev, function(e){ e.preventDefault(); z.classList.add('drag'); });
+    });
+    ['dragleave','drop'].forEach(function(ev){
+      z.addEventListener(ev, function(e){ e.preventDefault(); z.classList.remove('drag'); });
+    });
+    z.addEventListener('drop', function(e){
+      const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if(f) weeklyUploadFile(f);
+    });
+  })();
   showTab('floorplan');
 }
 
@@ -9610,7 +10183,7 @@ init();
      scaffolds never clobber one another. */
   var CONFIG_FIELDS = ["notifications","directory","nextNum","notifiedOverdue",
                        "rental","roles","auditLog","buildings","buildingFloors",
-                       "grid","notify"];
+                       "grid","notify","snapshots"];
   var CLIENT = "c" + Math.random().toString(36).slice(2);
   var db, auth, isAllowed = false, isOwner = false;
   var lastSync = {}, lastCfg = "", pushTimer = null, renderQueued = false;
