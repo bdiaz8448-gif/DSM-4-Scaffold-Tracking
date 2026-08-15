@@ -7232,6 +7232,22 @@ function renderFloorPlan(){
    on Week Over Week. Standing in front of a floor plan, "12 came down
    here since last week and we are still paying more" is the question,
    and it should not require walking over to another tab to answer. */
+/* Week Over Week is a card inside History, not a tab. Sending the user
+   to a tab id that does not exist threw inside applyTabView and left
+   them on a dead screen. Go to History, then scroll the card into view
+   so they land on the thing they clicked for rather than the top of a
+   long page. */
+function gotoWeekOverWeek(){
+  showTab('history');
+  setTimeout(function(){
+    const el = document.getElementById('wkDrop');
+    if(el && el.closest) {
+      const card = el.closest('.card') || el;
+      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, 120);
+}
+
 function renderPlanWeekStrip(){
   const el = document.getElementById('planWeekStrip');
   if(!el) return;
@@ -7279,7 +7295,7 @@ function renderPlanWeekStrip(){
     +   (money ? '<span class="pw-n ' + (money > 0 ? 'bad' : 'good') + '">'
         + (money > 0 ? '+' : '−') + fmtMoney(Math.abs(money)) + '/day</span>'
         : '<span class="pw-flat">unchanged</span>') + '</span>'
-    + '<button type="button" class="pw-more" onclick="showTab(\'weekly\')">'
+    + '<button type="button" class="pw-more" onclick="gotoWeekOverWeek()">'
     +   'Week Over Week ›</button>'
     + '</div>';
 }
