@@ -780,11 +780,25 @@ tr.stage-live{background:transparent;}
    scanned without reading across to the status. */
 .days-over{color:var(--red);font-weight:var(--fw-bold);font-variant-numeric:tabular-nums;}
 .cell-sub{font-size:var(--fs-3xs);color:var(--muted);margin-top:2px;}
-/* A sideways trackpad swipe was triggering Chrome's back/forward
-   gesture, and because every tab click writes a history entry, the page
-   appeared to pan left and right through tab history. This keeps the
-   back BUTTON working but stops the gesture hijack. */
-html,body{overscroll-behavior-x:none;}
+/* Two-finger swipe back/forward is how this gets used on a trackpad, so
+   the page must NOT block it. An earlier build killed the gesture site-wide
+   with overscroll-behavior-x:none -- that fixed an annoyance by removing a
+   navigation everyone relies on.
+
+   The real culprit was never the page, it was the wide tables: swipe inside
+   one, hit its end, and the scroll CHAINS to the page and fires the browser
+   gesture, so you get thrown backwards while trying to read a column. So the
+   containment goes on the scrollers, not on the document.
+
+   overscroll-behavior-x:contain = "when this box runs out of scroll, stop
+   there, don't hand it to the parent." Swipe on the page = go back. Swipe
+   inside a table = scroll the table, and only the table.
+
+   overflow-x:hidden on the root stops one wide child from making the whole
+   page slide sideways; it does not affect the back gesture. */
+html,body{max-width:100%;overflow-x:hidden;}
+.hscroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+.table-wrap,.table-scroll,.hscroll{overscroll-behavior-x:contain;}
 /* Ten rows at a time, everywhere a list can grow without bound. */
 .pager{display:flex;align-items:center;justify-content:center;gap:var(--sp-3);
   padding:var(--sp-3) 0 0;flex-wrap:wrap;}
@@ -2082,7 +2096,7 @@ textarea.mp-note{ display:block; width:100%; max-width:none; min-height:76px;
             <label style="font-size:12px;color:var(--muted);">to <input type="date" id="gcFltDateTo" onchange="renderGcView()" style="font-family:inherit;padding:6px 8px;border-radius:6px;border:1px solid var(--border);"></label>
             <button class="btn btn-outline btn-sm" onclick="document.getElementById('gcFltDateFrom').value='';document.getElementById('gcFltDateTo').value='';renderGcView();">Clear dates</button>
           </div>
-          <div style="overflow-x:auto;">
+          <div class="hscroll">
           <table>
             <thead><tr><th>ID / Tag</th><th>Status</th><th>Building</th><th>Floor</th><th>Room / Area</th>
               <th>Company Requesting</th><th>Requestor Name</th><th>Phone</th><th>Discipline</th><th>Builder Co.</th>
@@ -2286,7 +2300,7 @@ textarea.mp-note{ display:block; width:100%; max-width:none; min-height:76px;
         <div class="card">
           <h2>Delete a Request</h2>
           <p style="font-size:12px;color:var(--muted);margin-top:-6px;">Every tracked scaffold request, newest first. Deleting removes it and its full history permanently.</p>
-          <div style="overflow-x:auto;">
+          <div class="hscroll">
           <table>
             <thead><tr><th>ID / Tag</th><th>Status</th><th>Building</th><th>Floor</th><th>Room / Area</th><th>Requestor</th><th></th></tr></thead>
             <tbody id="ownerDeleteBody"></tbody>
@@ -2321,7 +2335,7 @@ textarea.mp-note{ display:block; width:100%; max-width:none; min-height:76px;
       </div>
       <div class="card">
         <h2>All Scaffolds For My Company</h2>
-        <div style="overflow-x:auto;">
+        <div class="hscroll">
         <table>
           <thead><tr><th>ID / Tag</th><th>Status</th><th>Building</th><th>Floor</th><th>Room / Area</th><th>Purpose</th><th></th></tr></thead>
           <tbody id="foremanAllBody"></tbody>
@@ -2331,7 +2345,7 @@ textarea.mp-note{ display:block; width:100%; max-width:none; min-height:76px;
     </div>
   </div>
 
-  <footer>Scaffold Command — Beta pilot on Building 537, DSM4 · Live shared register · Confidential — Project Aura · <span id="buildMarker">build 2026-08-12b</span></footer>
+  <footer>Scaffold Command — Beta pilot on Building 537, DSM4 · Live shared register · Confidential — Project Aura · <span id="buildMarker">build 2026-08-15-swipe</span></footer>
 </div>
 
 <div class="modal-backdrop" id="modalBackdrop" onclick="if(event.target===this) closeModal()">
@@ -5515,8 +5529,13 @@ function showTab(id){
   saveState();
   applyTabView(id);
   if(typeof history!=='undefined' && history.pushState){
-    if(_historyReady) history.pushState({tab:id}, '');
-    else { history.replaceState({tab:id}, ''); _historyReady = true; }
+    /* Only record a MOVE. Clicking the tab you are already on used to stack
+       a duplicate entry, and then the first swipe back appeared to do
+       nothing -- it was spending itself undoing a click that changed
+       nothing. One entry per actual change of tab. */
+    const already = history.state && history.state.tab === id;
+    if(!_historyReady){ history.replaceState({tab:id}, ''); _historyReady = true; }
+    else if(!already) history.pushState({tab:id}, '');
   }
 }
 function applyTabView(id){
@@ -10379,7 +10398,7 @@ function renderNotifyPanel(){
      + '</ul></details>';
 
   /* ---- the table ---- */
-  h += '<div style="overflow-x:auto;"><table class="dir-table"><thead><tr>'
+  h += '<div class="hscroll"><table class="dir-table"><thead><tr>'
      + '<th style="width:52px;">On</th><th>Person</th><th>Role</th><th>Building</th><th>Floor</th>';
   NOTIFY_EVENTS.forEach(function(e){ h += '<th title="'+e.hint+'" style="text-align:center;">'+e.label+'</th>'; });
   h += '</tr></thead><tbody>';
@@ -11320,7 +11339,7 @@ function openDetail(id){
       // Each crew gets one row showing their full arc with dates, so you can
       // answer "who is still on it and when did the rest sign off" without
       // opening the full history below.
-      html += '<div style="overflow-x:auto;"><table class="stage-table">';
+      html += '<div class="hscroll"><table class="stage-table">';
       html += '<thead><tr><th>Contractor</th><th>Working Since</th><th>Modification Requested</th><th>Finished</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
       stageRows.forEach((e, idx)=>{
         const rowCls = e.isFinished ? 'stage-done' : 'stage-live';
