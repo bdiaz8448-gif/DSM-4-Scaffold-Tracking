@@ -1564,6 +1564,14 @@ details.fold > .fold-body{ padding-bottom:16px; }
 /* KPI captions now carry a real sentence, so they need room to breathe. */
 .kpi-grid.kpi-auto .kpi-note{ line-height:1.45; }
 .kpi-grid.kpi-auto .kpi{ padding-bottom:var(--sp-4); }
+
+/* Standing disclosure wherever a money figure is shown. Quiet, but always
+   present -- a rental-only number read as a total cost is a budgeting
+   mistake waiting to happen. */
+.rent-only{ margin-top:var(--sp-3); padding-top:var(--sp-2);
+  border-top:1px dashed var(--border); font-size:var(--fs-2xs);
+  color:var(--muted); line-height:1.5; }
+.rent-only b{ color:var(--ink); }
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
@@ -1962,7 +1970,7 @@ details.fold > .fold-body{ padding-bottom:16px; }
           <table>
             <thead><tr><th>ID / Tag</th><th>Status</th><th>Building</th><th>Floor</th><th>Room / Area</th>
               <th>Company Requesting</th><th>Requestor Name</th><th>Phone</th><th>Discipline</th><th>Builder Co.</th>
-              <th>Date Requested</th><th>Date Approved</th><th>Due Date</th><th>Date Built</th><th title="Days standing since the erect date; red past 60">Days Standing</th><th>Date Modified</th><th>Date Dismantled</th><th title="One-off cost to erect the scaffold">Erect</th><th title="Daily rental rate in force for this scaffold">Rate/Day</th><th title="Days the scaffold has been on rent: days standing minus this builder's free period">Days on Rent</th><th title="Days on rent x rate/day">Rental</th><th title="Erect + rental">Total</th><th></th></tr></thead>
+              <th>Date Requested</th><th>Date Approved</th><th>Due Date</th><th>Date Built</th><th title="Days standing since the erect date; red past 60">Days Standing</th><th>Date Modified</th><th>Date Dismantled</th><th title="One-off cost to erect the scaffold">Erect</th><th title="Daily rental rate in force for this scaffold">Rate/Day</th><th title="Days the scaffold has been on rent: days standing minus this builder's rent-free period">Days on Rent</th><th title="Days on rent x rate/day">Rental</th><th title="Erect + rental">Total</th><th></th></tr></thead>
             <tbody id="gcAllBody"></tbody>
           </table>
           </div>
@@ -2291,6 +2299,29 @@ const DURATION_DAYS = {'1 week':7,'2 weeks':14,'1 month':30,'2 months':60};
    the same 60 as the '2 months' duration above, deliberately -- one number,
    not two that can drift apart. */
 const STANDING_LIMIT_DAYS = 60;
+
+/* WHAT THE MONEY ON THIS SITE IS, AND IS NOT.
+
+   Every dollar figure in this app is RENTAL: the daily charge a scaffold
+   accrues once it passes its rent-free window. That is the only money
+   AMECO's weekly report contains.
+
+   It is not the whole cost. Building a scaffold and stripping it back out
+   are charged separately, and on this job that is real money -- crew time,
+   material handling, lifts. A scaffold inside its rent-free window has
+   already cost plenty; it simply is not on the rental meter yet.
+
+   The page used to call that window "free", which read as "this scaffold
+   costs nothing". It never did. Say rent-free, and say plainly what is
+   missing, so nobody budgets off a number that only covers part of the
+   bill. When AMECO supplies erect and dismantle rates, they slot in here
+   and this note gets shorter. */
+const RENT_ONLY_NOTE =
+    '<div class="rent-only"><b>These figures are rental only.</b> '
+  + 'Erecting a scaffold and tearing it down are billed separately by AMECO, '
+  + 'and those charges are not in this report &mdash; so they are not in any '
+  + 'number on this page. A scaffold inside its rent-free window still cost '
+  + 'money to put up; it just is not accruing rent yet.</div>';
 function isOverStandingLimit(rec){
   const d = daysStanding(rec);
   return d != null && d >= STANDING_LIMIT_DAYS && isStanding(rec);
@@ -4128,8 +4159,8 @@ function rentalPolicyNote(rec){
   const pol = rentalPolicyFor(rec);
   const rs  = rateSource(rec);
   const days = (pol.source === 'company')
-    ? pol.company + ': ' + pol.freeDays + ' free days'
-    : 'Site default: ' + pol.freeDays + ' free days';
+    ? pol.company + ': ' + pol.freeDays + ' rent-free days'
+    : 'Site default: ' + pol.freeDays + ' rent-free days';
   let rate;
   if(rs.source === 'scaffold'){
     // The one case that genuinely looks like a bug unless it is named.
@@ -4275,24 +4306,24 @@ function renderBleed(recs){
     + 'What is still running today, not what it has cost to date. '
     + (b.policy.mixed
         ? 'Free periods differ by builder — ' + b.policy.days.join(', ') + ' days.'
-        : 'Rental starts after ' + (b.policy.days[0] != null ? b.policy.days[0] : rentalSettings().freeDays) + ' free days.')
+        : 'Rental starts after ' + (b.policy.days[0] != null ? b.policy.days[0] : rentalSettings().freeDays) + ' rent-free days.')
     + '</p>';
   h += '<div class="bleed-row">';
   h += '<div class="bleed-cell live"><div class="lbl">Burning per day</div>'
     + '<div class="n">'+fmtMoney(b.perDay)+'</div>'
-    + '<div class="sub">'+(b.perDay ? 'across scaffolds past their free window'
-        : 'nothing is being charged yet — all '+b.standing+' standing are inside the free period')+'</div></div>';
+    + '<div class="sub">'+(b.perDay ? 'rent across scaffolds past their rent-free window'
+        : 'no rent is running yet — all '+b.standing+' standing are inside their rent-free window (building them still cost money)')+'</div></div>';
   h += '<div class="bleed-cell '+(b.overdueAmt?'crit':(b.overdueN?'warn':''))+'"><div class="lbl">Overdue</div>'
     + '<div class="n">'+fmtMoney(b.overdueAmt)+'</div>'
     // A $0 next to a non-zero overdue count looks like a bug unless it
     // says why. It is not a bug: late, but not yet chargeable.
     + '<div class="sub">rental on '+b.overdueN+' scaffold'+(b.overdueN===1?'':'s')+' past due date'
-    + (b.lateButFree ? ' · '+b.lateButFree+' still inside the free period' : '')
+    + (b.lateButFree ? ' · '+b.lateButFree+' not yet renting' : '')
     + '</div></div>';
   h += '<div class="bleed-cell '+(b.idleN?'bad':'')+'"><div class="lbl">Idle</div>'
     + '<div class="n">'+fmtMoney(b.idleAmt)+'</div>'
     + '<div class="sub">'+b.idleN+' standing unused</div></div>';
-  h += '<div class="bleed-cell warn"><div class="lbl">Still free</div>'
+  h += '<div class="bleed-cell warn"><div class="lbl">Not renting yet</div>'
     + '<div class="n">'+b.freeN+'</div>'
     + '<div class="sub">will start at '+fmtMoney(b.freeExposure)+'/day</div></div>';
   h += '</div>';
@@ -4311,7 +4342,7 @@ function renderBleed(recs){
   const cfg = rentalSettings();
   h += '<div class="bleed-recon">Same figures as the dashboard banner and the aging strip — all read one calculation. '
     + 'Each scaffold uses its builder\'s own terms, falling back to the site default of '
-    + fmtMoney(cfg.unitRate) + '/piece/day after ' + cfg.freeDays + ' free days. '
+    + fmtMoney(cfg.unitRate) + '/piece/day after ' + cfg.freeDays + ' rent-free days. '
     + 'Set per-company terms in Directory → Scaffold Builder Companies.</div>';
   el.innerHTML = h;
 }
@@ -4917,7 +4948,7 @@ function checkOverdueNotifications(){
        && !state.notifiedOverdue[r.id+'-rental']){
       const pol = rentalPolicyFor(r);
       pushNotification('Rental started: '+(r.tag||r.id),
-        (r.tag||r.id)+' has passed its '+pol.freeDays+' free days and is now costing '
+        (r.tag||r.id)+' has passed its '+pol.freeDays+' rent-free days and is now renting at '
         + fmtMoney(effectiveDailyRate(r))+' a day'
         + (r.builderCompany ? ' to '+r.builderCompany : '')+'.',
         recipientsFor('overdue', r), r.id);
@@ -5936,7 +5967,7 @@ function renderWeekly(){
             + ' (' + fmtMoney(prev.burn) + ' then, ' + fmtMoney(curr.burn) + ' now)')
     + delta('Now Charging Rent', d.onRentDelta, num, true,
             Math.abs(d.onRentDelta) + (d.onRentDelta > 0 ? ' more have' : ' fewer have')
-            + ' used up their ' + STANDING_LIMIT_DAYS + ' free days and started billing ('
+            + ' used up their ' + STANDING_LIMIT_DAYS + ' rent-free days and started renting ('
             + prev.onRent + ' then, ' + curr.onRent + ' now)')
     + '<div class="kpi"><div class="label">Built / Taken Down</div><div class="value">'
       + d.added.length + ' / ' + d.removed.length + '</div>'
@@ -5967,15 +5998,18 @@ function renderWeekly(){
       + '<b>Fewer scaffolds, but a bigger bill. Here is why.</b><br>'
       + 'There are <b>' + Math.abs(d.standingDelta) + ' fewer</b> scaffolds standing than on '
       + A + ', yet the daily rent went <b>up ' + fmtMoney(d.burnDelta) + '</b>.<br><br>'
-      + 'A scaffold is free for its first <b>' + STANDING_LIMIT_DAYS
-      + ' days</b>. After that it starts charging every day it stays up.<br>'
+      + 'A scaffold pays <b>no rent</b> for its first <b>' + STANDING_LIMIT_DAYS
+      + ' days</b>. After that, rent is charged every day it stays up.<br>'
       + '&bull; Of the <b>' + d.removed.length + '</b> that came down, <b>' + downFree
-      + '</b> were still inside their free days &mdash; taking those away saved nothing, because they were not costing anything.'
-      + (downPaid ? ' Only <b>' + downPaid + '</b> were actually being billed.' : '')
+      + '</b> were still inside their rent-free days, so taking them away cut <b>no rent</b>. '
+      + 'They were not free to have &mdash; the crew was still paid to build and to strip them &mdash; '
+      + 'but they were not on the rental meter yet.'
+      + (downPaid ? ' Only <b>' + downPaid + '</b> were actually being rented.' : '')
       + '<br>&bull; Meanwhile <b>' + crossed + '</b> of the ones that stayed up crossed day '
       + STANDING_LIMIT_DAYS + ' during this window and started charging.<br><br>'
-      + '<b>The lesson:</b> taking down an old scaffold saves money. Taking down a new one does not. '
-      + 'To cut the bill, go after the ones that have been up longest.</div>';
+      + '<b>The lesson:</b> taking down an old scaffold cuts rent. Taking down a new one does not. '
+      + 'To cut the rental bill, go after the ones that have been up longest.'
+      + RENT_ONLY_NOTE + '</div>';
   } else if(d.standingDelta > 0 && d.burnDelta < 0){
     note.innerHTML = '<div class="notice info" style="margin-top:12px;">'
       + '<b>More scaffolds, and a smaller bill. Here is why.</b><br>'
@@ -5983,14 +6017,15 @@ function renderWeekly(){
       + '<b>fell ' + fmtMoney(Math.abs(d.burnDelta)) + '</b>. '
       + 'The scaffolds that came down were the old expensive ones &mdash; <b>' + downPaid
       + '</b> of the ' + d.removed.length + ' were past their ' + STANDING_LIMIT_DAYS
-      + ' free days &mdash; and the new ones going up are still inside their free window, '
-      + 'so they cost nothing yet. Worth watching: they will start charging as they age.</div>';
+      + ' rent-free days &mdash; and the new ones going up are still inside their rent-free window, '
+      + 'so no rent is running on them yet. Worth watching: they start charging as they age.'
+      + RENT_ONLY_NOTE + '</div>';
   } else if(d.standingDelta === 0 && d.burnDelta > 0){
     note.innerHTML = '<div class="notice warn" style="margin-top:12px;">'
       + '<b>Same number of scaffolds, bigger bill.</b> The count did not move, but '
       + fmtMoney(d.burnDelta) + '/day more is going out because <b>' + crossed
       + '</b> scaffolds crossed their ' + STANDING_LIMIT_DAYS
-      + '-day free window and started charging.</div>';
+      + '-day rent-free window and started charging.' + RENT_ONLY_NOTE + '</div>';
   } else {
     note.innerHTML = '';
   }
@@ -6315,7 +6350,7 @@ function renderDashboard(){
   const exposure = M.overdue;
   if(M.overdueN > 0){
     exposureBanner.style.display = '';
-    exposureBanner.innerHTML = '<div><div class="label">💸 '+scopeName+' — '+M.overdueN+' scaffold'+(M.overdueN===1?'':'s')+' past due date'+(M.lateButFree?' · '+M.lateButFree+' still inside the free period':'')+'</div><div class="value">'+fmtMoney(exposure)+'</div>'
+    exposureBanner.innerHTML = '<div><div class="label">💸 '+scopeName+' — '+M.overdueN+' scaffold'+(M.overdueN===1?'':'s')+' past due date'+(M.lateButFree?' · '+M.lateButFree+' not yet renting':'')+'</div><div class="value">'+fmtMoney(exposure)+'</div>'
       + '<div class="label" style="opacity:.92;">paying rent on '+M.overdueN+' overdue scaffold'+(M.overdueN===1?'':'s')+' · '+fmtMoney(M.burn)+'/day</div></div>'
       + '<button class="btn btn-outline btn-sm" style="background:rgba(255,255,255,.15);color:white;border-color:rgba(255,255,255,.4);" onclick="goToAllFiltered(\'overdue\')">View Overdue</button>';
   } else {
@@ -8231,7 +8266,7 @@ function renderGcView(){
     const cBilled = showCost
       ? (bDays ? '<b>'+bDays+' d</b>'
                : (isStanding(r) && freeLeft > 0
-                   ? '<span class="cost-free">0 · '+freeLeft+'d free</span>'
+                   ? '<span class="cost-free">no rent · '+freeLeft+'d left</span>'
                    : '0 d'))
       : '—';
     const cRental = showCost
@@ -8622,7 +8657,7 @@ function dirRows(list, kind, offset){
     + '<td><input value="'+c.email+'" onchange="editDirEntry(\''+kind+'\','+(off+i)+',\'email\',this.value)"></td>'
     + '<td><input value="'+c.phone+'" onchange="editDirEntry(\''+kind+'\','+(off+i)+',\'phone\',this.value)"></td>'
     + (cfg.notes ? '<td><input value="'+(c.notes||'')+'" placeholder="Notes" onchange="editDirEntry(\''+kind+'\','+(off+i)+',\'notes\',this.value)"></td>' : '')
-    + (cfg.terms ? '<td><input type="number" min="0" step="1" class="terms-input" value="'+(typeof c.freeDays==='number'?c.freeDays:'')+'" placeholder="site" title="Free days before rental starts for this company" onchange="editDirTerms(\''+kind+'\','+(off+i)+',\'freeDays\',this.value)"></td>'
+    + (cfg.terms ? '<td><input type="number" min="0" step="1" class="terms-input" value="'+(typeof c.freeDays==='number'?c.freeDays:'')+'" placeholder="site" title="Rent-free days before rental starts for this company" onchange="editDirTerms(\''+kind+'\','+(off+i)+',\'freeDays\',this.value)"></td>'
         + '<td><input type="number" min="0" step="0.01" class="terms-input" value="'+(typeof c.dayRate==='number'?c.dayRate:'')+'" placeholder="—" title="Default daily rate for a scaffold from this company" onchange="editDirTerms(\''+kind+'\','+(off+i)+',\'dayRate\',this.value)"></td>' : '')
     + (cfg.pin ? '<td><input value="'+(c.pin||'')+'" onchange="editDirEntry(\''+kind+'\','+(off+i)+',\'pin\',this.value)"></td>' : '')
     + (cfg.notify ? '<td style="text-align:center;"><input type="checkbox" '+(c.notify!==false && (c.role==='Project Manager'||c.role==='Superintendent')?'checked':'')
@@ -9628,7 +9663,7 @@ function editDirTerms(kind, idx, field, value){
   // Terms feed every cost figure in the app, so redraw the lot rather
   // than leaving the dashboard showing yesterday's arithmetic.
   renderAll();
-  toast(co.name+' — '+(field==='freeDays'?'free days':'unit rate')+' '
+  toast(co.name+' — '+(field==='freeDays'?'rent-free days':'unit rate')+' '
     + (after===null?'now uses the site default':'set to '+after), 'success');
 }
 function editDirEntry(kind, idx, field, value){
@@ -10158,7 +10193,7 @@ function openDetail(id){
       + (effectiveDailyRate(r)?'<div class="metric-sub">at '+fmtMoney(effectiveDailyRate(r))+'/day · '
         +(billableDays(r)>0
             ? billableDays(r)+' day'+(billableDays(r)===1?'':'s')+' on rent'
-            : freePeriodLeft(r)+' free day'+(freePeriodLeft(r)===1?'':'s')+' left')
+            : freePeriodLeft(r)+' rent-free day'+(freePeriodLeft(r)===1?'':'s')+' left')
         +'<br>'+rentalPolicyNote(r)+'</div>':'')+'</div>';
     html += '<div class="metric-card"><div class="metric-label">Total Estimated Cost</div><div class="metric-value">'+fmtMoney(totalCost(r))+'</div>'
       + (r.erectPrice?'<div class="metric-sub">incl. '+fmtMoney(r.erectPrice)+' erect</div>':'')+'</div>';
@@ -10204,7 +10239,7 @@ function openDetail(id){
          different start dates. */
       if(lateD){
         h += '<div class="calc-flag">Past its due date of '+fmtDate(r.dueDate)+' by <b>'+lateD+' day'+(lateD===1?'':'s')+'</b>'
-          + (bDays>0 ? ' — the rental above is what that is costing.' : ' — still inside the free period, so no charge yet.')
+          + (bDays>0 ? ' — the rental above is what that is costing.' : ' — still inside its rent-free window, so no rental yet. Erecting it was billed separately.')
           + '</div>';
       }
       h += '</div>';
