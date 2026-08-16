@@ -1572,6 +1572,10 @@ details.fold > .fold-body{ padding-bottom:16px; }
   border-top:1px dashed var(--border); font-size:var(--fs-2xs);
   color:var(--muted); line-height:1.5; }
 .rent-only b{ color:var(--ink); }
+
+/* Manpower entry form. */
+.mp-form .lbl{ display:block; max-width:280px; margin-bottom:var(--sp-3); }
+.mp-form .mp-in{ max-width:120px; }
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
@@ -1824,12 +1828,7 @@ details.fold > .fold-body{ padding-bottom:16px; }
       </div>
       <div id="histBldgTabs" class="building-tabs"></div>
       <div id="histKpis" class="kpi-grid kpi-auto"></div>
-      <div class="notice info" style="margin-top:12px;">
-        <b>About the dates.</b> Every date on this page is an <b>erect date</b> &mdash; the day
-        the scaffold went up. AMECO&rsquo;s All Scaffolds tab does not carry a takedown date,
-        and its Days Standing column keeps counting to today even after a scaffold is gone,
-        so how long each one actually stood cannot be read off this page yet.
-      </div>
+      <div id="histDatesNote" class="notice info" style="margin-top:12px;"></div>
       </div>
     </details>
 
@@ -1870,7 +1869,8 @@ details.fold > .fold-body{ padding-bottom:16px; }
              oninput="histSearchChanged(this.value)" style="max-width:340px;margin-bottom:10px;">
       <div class="table-wrap"><table class="data-table">
         <thead><tr><th>Tag</th><th>Building</th><th>Sub Area</th><th>Work Location</th>
-          <th>Trade</th><th>Requested By</th><th>Erected</th><th>Outcome</th></tr></thead>
+          <th>Trade</th><th>Requested By</th><th>Erected</th><th>Taken Down</th>
+          <th>Days It Stood</th><th>Outcome</th></tr></thead>
         <tbody id="histTable"></tbody></table></div>
       <div id="histPager"></div>
       </div>
@@ -1918,6 +1918,51 @@ details.fold > .fold-body{ padding-bottom:16px; }
         <div><h3 class="sub-h">Went up in this window</h3><div id="wkAdded"></div></div>
         <div><h3 class="sub-h">Came down in this window</h3><div id="wkRemoved"></div></div>
       </div>
+      </div>
+    </details>
+
+  </div>
+
+  <div id="view-manpower" class="view">
+
+    <details class="card fold" id="fold-mp" open>
+      <summary><h2 id="mpTitle">Manpower &mdash; Who Is On Site</h2></summary>
+      <div class="fold-body">
+      <p class="fold-sub">
+        One row per week: how many people the scaffold builder has here by role, the hours
+        they worked and what they cost. The point is the trend &mdash; are they putting more
+        people on, or quietly taking them off while the backlog grows?</p>
+      <div id="mpKpis" class="kpi-grid kpi-auto"></div>
+      <div id="mpNote"></div>
+      </div>
+    </details>
+
+    <details class="card fold" id="fold-mp-trend" open>
+      <summary><h2>Headcount Over Time</h2></summary>
+      <div class="fold-body">
+      <p class="fold-sub">Total people on site each week. Follows the roles you have entered.</p>
+      <div id="mpTrend"></div>
+      </div>
+    </details>
+
+    <details class="card fold" id="fold-mp-roles" open>
+      <summary><h2>By Role, Week by Week</h2></summary>
+      <div class="fold-body">
+      <p class="fold-sub">Every week you have entered. Newest first. Sign in as Owner or GC Admin to add or edit.</p>
+      <div class="table-wrap"><table class="data-table">
+        <thead id="mpHead"></thead><tbody id="mpTable"></tbody></table></div>
+      <div id="mpPager"></div>
+      </div>
+    </details>
+
+    <details class="card fold" id="fold-mp-add">
+      <summary><h2>Add or Update a Week</h2></summary>
+      <div class="fold-body">
+      <p class="fold-sub">
+        Enter what the builder had on site for the week. Enter the same week again to correct it &mdash;
+        it replaces rather than duplicates. Leave a field blank if you do not know it;
+        blank is recorded as unknown, not as zero.</p>
+      <div id="mpForm"></div>
       </div>
     </details>
 
@@ -2239,7 +2284,7 @@ details.fold > .fold-body{ padding-bottom:16px; }
 </div>
 
 <script>
-const SEED = {"dataVersion": "2026-08-14-all-scaffold-history", "generated": "2026-07-03", "rooms": {"DSM4": {"Ground Floor": ["Process Corridor (537-01041)", "Process Corridor (537-01042)", "Process Corridor (537-01043)", "Stair 1 (537-01001)", "Stair 2 (537-01002)", "Lower Production Cell Culture (537-01660)", "WIP Lab (537-01661)", "Open Area (537-01662)", "Sprinkler Riser Room (537-01260)", "Campaign Equipment Storage (537-01204)", "Mechanical (537-01205)", "Mechanical Equipment (537-01209)", "HVAC Mechanical (537-01202)", "Shaft (537-01210)", "WFI Stills (537-01208)", "Water Systems (537-01201)", "Waste Systems (537-01206)", "Janitor (537-01203)", "Telecom (537-01250)", "IDF (537-01251)", "Electrical Closet (537-01230)", "Electrical Closet (537-01231)", "Harvest (537-01680)", "JC (537-01683)", "MAL (537-01681)", "PAL (537-01682)", "Work Room (537-01684)", "Ceiling Access (537-01633)", "MAL (537-01631)", "PAL Out (537-01621)", "Column Packing (537-01630)", "Cold Room (537-01622)", "Filter Assembly Room (537-01625)", "Initial Purification (537-01620)", "Dirty VRC (537-10012)", "Clean VRC (537-10011)", "Product Hold (537-01605)", "CNC Storage (537-01200)", "Bulk Fill (537-01610)", "Clean Staging (537-01603)", "Cold Pass Through (537-01613)", "PAL (537-01611)", "MAL (537-01612)", "MAL (537-01602)", "JC (537-01604)", "Final Purification (537-01600)", "PAL In (537-01601)", "Chrom Bay 1", "Chrom Bay 2", "Chrom Bay 3", "Flex Bay (Future)", "Other / Not Listed"], "Ground Floor Interstitial": ["Walk-On Ceiling - Ground Floor (537-05960)", "Electrical Closet - Open to Below (537-01230)", "HVAC Mechanical - Open to Below (537-01202)", "Telecom - Open to Below (537-01250)", "IDF - Open to Below (537-01251)", "Walkable Ceiling Zone, Typ.", "Non-Walkable Ceiling Zone", "Other / Not Listed"], "First Floor": ["Process Corridor (537-10040)", "Process Corridor (537-10043)", "Corridor (537-10042)", "Stair 1 (537-10001)", "Stair 2 (537-10002)", "Upper Production Cell Culture (537-10660)", "JC (537-10661)", "Process Mechanical (537-10645)", "Process Mechanical (537-10651)", "Process Mechanical (537-10653)", "Mechanical/Utility (537-10201)", "Electrical Room (537-10230)", "HVAC Mechanical (537-10200)", "HVAC Mechanical (537-10204)", "Upstream CIP (537-10203)", "Upstream Post Autoclave Staging (537-10654)", "Upstream Clean Staging (537-10652)", "Upstream Dirty Staging (537-10650)", "WIP Lab (537-10644)", "Seed Cell Culture (537-10640)", "MAL/PAL (537-10632)", "Inoculum Lab (537-10630)", "JC (537-10643)", "MAL (537-10642)", "PAL (537-10641)", "CNC Storage (537-10631)", "Janitor (537-10205)", "IDF (537-10251)", "Telecom Room (537-10250)", "Central CIP (537-10202)", "Dirty VRC (537-10012)", "Clean VRC (537-10011)", "Buffer Hold (537-10620)", "Shaft (537-10210)", "Other / Not Listed"], "First Floor Interstitial": ["Electrical Room - Open to Below (537-10230)", "HVAC Mechanical - Open to Below (537-10200)", "Telecom Room - Open to Below (537-10250)", "Lift Zone", "Walkable Ceiling Zone, Typ.", "Non-Walkable Ceiling Zone", "Other / Not Listed"], "Second Floor": ["Process Corridor (537-20040)", "Process Corridor (537-20041)", "Stair 1 (537-20001)", "Stair 2 (537-20002)", "Louver Plenum (537-20202)", "Louver Plenum (537-20203)", "Electrical Substation (537-20233)", "Electrical Room (537-20231)", "Electrical Room (537-20232)", "Electrical Closet (537-20230)", "HVAC Mechanical (537-20200)", "Telecom Room (537-20250)", "IDF (537-20251)", "WIP Lab (537-20648)", "JC (537-20646)", "JC (537-20604)", "JC (537-20622)", "Media Prep (537-20640)", "Media Tech Space (537-20649)", "Media Hold/Perfusion (537-20660)", "Cold Room (537-20647)", "Cold MAL (537-20641)", "MAL Out (537-20642)", "MAL In (537-20643)", "FTS Room (537-20645)", "Process Mechanical (537-20625)", "Process Mechanical (537-20623)", "Dirty Wash Staging (537-20626)", "Clean Wash Staging (537-20624)", "Post Autoclave Staging (537-20620)", "Dirty VRC (537-10012)", "Clean VRC (537-10011)", "Buffer Prep (537-20600)", "Janitor (537-20650)", "Shaft (537-20210)", "Other / Not Listed"], "Second Floor Interstitial": ["Walk-On Ceiling - Second Floor (537-25960)", "Electrical Room - Open to Below (537-20231)", "HVAC Mechanical - Open to Below (537-20200)", "Media Tech Space - Open to Below (537-20649)", "Walkable Ceiling Zone, Typ.", "Non-Walkable Ceiling Zone", "Other / Not Listed"]}, "DSM1": {"General Area": []}, "DSM2": {"General Area": []}, "DSM3": {"General Area": []}, "Warehouse": {"General Area": []}, "HB2": {"General Area": []}, "CUB": {"General Area": []}, "CUB Expansion": {"General Area": []}, "DPFG": {"General Area": []}, "Lab/Admin Building": {"General Area": []}, "Tank Farm": {"General Area": []}, "Spine": {"General Area": []}, "Site": {"General Area": []}}, "buildingName": "Project Aura / Pixie Dust Campus \u2014 Pilot on Building 537 (DSM4)", "buildings": ["DSM4", "DSM1", "DSM2", "DSM3", "Warehouse", "HB2", "CUB", "CUB Expansion", "DPFG", "Lab/Admin Building", "Tank Farm", "Spine", "Site"], "buildingFloors": {"DSM4": ["Ground Floor", "Ground Floor Interstitial", "First Floor", "First Floor Interstitial", "Second Floor", "Second Floor Interstitial"], "DSM1": ["Ground Floor", "Level 2"], "DSM2": ["General Area"], "DSM3": ["Ground Floor", "First Floor", "Second Floor"], "Warehouse": ["General Area"], "HB2": ["Ground Level", "Roof"], "CUB": ["Ground Floor", "First Floor", "Roof"], "CUB Expansion": ["Ground Floor", "Level 1"], "DPFG": ["General Area"], "Lab/Admin Building": ["General Area"], "Tank Farm": ["General Area"], "Spine": ["Ground Floor", "Second Floor", "Roof"], "Site": ["Exterior"]}, "directory": {"gc": [], "gcPersonnel": [], "builders": [], "builderPersonnel": [], "contractors": [], "safety": []}, "disciplines": ["Piping", "Structural", "Steel", "Electrical", "Instrumentation", "HVAC", "Mechanical", "Insulation", "Paint", "Safety", "Siting", "Consultant", "Other"], "durations": ["1 week", "2 weeks", "1 month", "2 months"], "floors": ["Ground Floor", "Ground Floor Interstitial", "First Floor", "First Floor Interstitial", "Second Floor", "Second Floor Interstitial"], "records": [], "notifications": [], "history": [], "awaitingErection": [], "grid": {"DSM4": {"First Floor": {"cols": [{"label": "13", "x": 11.785}, {"label": "12", "x": 17.667}, {"label": "11", "x": 23.917}, {"label": "10", "x": 27.962}, {"label": "9", "x": 31.638}, {"label": "8", "x": 35.315}, {"label": "7.4", "x": 37.398}, {"label": "7", "x": 38.991}, {"label": "6", "x": 43.035}, {"label": "5", "x": 47.815}, {"label": "4", "x": 51.859}, {"label": "3", "x": 56.27}, {"label": "2", "x": 62.52}, {"label": "1", "x": 68.403}], "rows": [{"label": "F", "y": 21.812}, {"label": "E", "y": 28.63}, {"label": "D", "y": 37.721}, {"label": "C", "y": 48.516}, {"label": "B", "y": 58.744}, {"label": "A", "y": 70.36}], "source": "auto-detected from the floor plan image"}, "First Floor Interstitial": {"cols": [{"label": "13", "x": 11.785}, {"label": "12", "x": 17.667}, {"label": "11", "x": 23.917}, {"label": "10", "x": 27.962}, {"label": "9", "x": 31.638}, {"label": "8", "x": 35.315}, {"label": "7", "x": 38.991}, {"label": "6", "x": 43.035}, {"label": "5", "x": 47.815}, {"label": "4", "x": 51.859}, {"label": "3", "x": 56.27}, {"label": "2", "x": 62.52}, {"label": "1", "x": 68.403}], "rows": [{"label": "F", "y": 21.812}, {"label": "E", "y": 28.63}, {"label": "D", "y": 37.721}, {"label": "C", "y": 48.516}, {"label": "B", "y": 58.744}, {"label": "A", "y": 70.36}], "source": "auto-detected from the floor plan image"}, "Ground Floor": {"cols": [{"label": "13", "x": 13.787}, {"label": "12", "x": 19.669}, {"label": "11", "x": 25.919}, {"label": "10", "x": 29.963}, {"label": "9", "x": 33.64}, {"label": "8", "x": 37.316}, {"label": "7.4", "x": 39.4}, {"label": "7", "x": 40.993}, {"label": "6", "x": 45.037}, {"label": "5", "x": 49.816}, {"label": "4", "x": 53.86}, {"label": "3", "x": 58.272}, {"label": "2", "x": 64.522}, {"label": "1", "x": 70.404}], "rows": [{"label": "F", "y": 26.641}, {"label": "E", "y": 33.491}, {"label": "D", "y": 42.551}, {"label": "C", "y": 53.314}, {"label": "B", "y": 63.542}, {"label": "A", "y": 75.221}], "source": "auto-detected from the floor plan image"}, "Ground Floor Interstitial": {"cols": [{"label": "13", "x": 11.785}, {"label": "12", "x": 17.667}, {"label": "11", "x": 23.917}, {"label": "10", "x": 27.962}, {"label": "9", "x": 31.638}, {"label": "8", "x": 35.315}, {"label": "7", "x": 38.991}, {"label": "6", "x": 43.035}, {"label": "5", "x": 47.815}, {"label": "4", "x": 51.859}, {"label": "3", "x": 56.27}, {"label": "2", "x": 62.52}, {"label": "1", "x": 68.403}], "rows": [{"label": "F", "y": 21.812}, {"label": "E", "y": 28.63}, {"label": "D", "y": 37.721}, {"label": "C", "y": 48.516}, {"label": "B", "y": 58.744}, {"label": "A", "y": 70.36}], "source": "auto-detected from the floor plan image"}, "Second Floor": {"cols": [{"label": "13", "x": 11.785}, {"label": "12", "x": 17.667}, {"label": "11", "x": 23.917}, {"label": "10", "x": 27.962}, {"label": "9", "x": 31.638}, {"label": "8", "x": 35.315}, {"label": "7.4", "x": 37.398}, {"label": "7", "x": 38.991}, {"label": "6", "x": 43.035}, {"label": "5", "x": 47.815}, {"label": "4", "x": 51.859}, {"label": "3", "x": 56.27}, {"label": "2", "x": 62.52}, {"label": "1", "x": 68.403}], "rows": [{"label": "F", "y": 21.749}, {"label": "E", "y": 28.567}, {"label": "D", "y": 37.658}, {"label": "C", "y": 48.453}, {"label": "B", "y": 58.681}, {"label": "A", "y": 70.297}], "source": "auto-detected from the floor plan image"}, "Second Floor Interstitial": {"cols": [{"label": "13", "x": 11.785}, {"label": "12", "x": 17.667}, {"label": "11", "x": 23.917}, {"label": "10", "x": 27.962}, {"label": "9", "x": 31.638}, {"label": "8", "x": 35.315}, {"label": "7", "x": 38.991}, {"label": "6", "x": 43.035}, {"label": "5", "x": 47.794}, {"label": "4", "x": 51.838}, {"label": "3", "x": 56.25}, {"label": "2", "x": 62.48}, {"label": "1", "x": 68.362}], "rows": [{"label": "F", "y": 24.653}, {"label": "E", "y": 31.471}, {"label": "D", "y": 40.562}, {"label": "C", "y": 51.326}, {"label": "B", "y": 61.553}, {"label": "A", "y": 73.201}], "source": "auto-detected from the floor plan image"}}, "DSM3": {"Ground Floor": {"cols": [{"label": "13", "x": 13.79}, {"label": "12", "x": 19.672}, {"label": "11", "x": 25.917}, {"label": "10", "x": 29.961}, {"label": "9", "x": 33.64}, {"label": "8", "x": 37.312}, {"label": "7.4", "x": 39.412}, {"label": "7", "x": 40.988}, {"label": "6", "x": 45.032}, {"label": "5", "x": 49.807}, {"label": "4", "x": 53.851}, {"label": "3", "x": 58.263}, {"label": "2", "x": 64.508}, {"label": "1", "x": 70.391}], "rows": [{"label": "F", "y": 26.47}, {"label": "E", "y": 33.278}, {"label": "D", "y": 42.369}, {"label": "C", "y": 53.157}, {"label": "B", "y": 63.386}, {"label": "A", "y": 75.03}], "source": "read from the grid bubbles on DMS3 Ground Floor.pdf"}, "First Floor": {"cols": [{"label": "13", "x": 11.785}, {"label": "12", "x": 17.662}, {"label": "11", "x": 23.912}, {"label": "10", "x": 27.952}, {"label": "9", "x": 31.631}, {"label": "8", "x": 35.307}, {"label": "7.4", "x": 37.403}, {"label": "7", "x": 38.979}, {"label": "6", "x": 43.023}, {"label": "5", "x": 47.802}, {"label": "4", "x": 51.841}, {"label": "3", "x": 56.253}, {"label": "2", "x": 62.503}, {"label": "1", "x": 68.381}], "rows": [{"label": "F", "y": 21.869}, {"label": "E", "y": 28.685}, {"label": "D", "y": 37.776}, {"label": "C", "y": 48.564}, {"label": "B", "y": 58.792}, {"label": "A", "y": 70.436}], "source": "read from the grid bubbles on DMS3 First Floor.pdf"}, "Second Floor": {"cols": [{"label": "13", "x": 11.78}, {"label": "12", "x": 17.662}, {"label": "11", "x": 23.912}, {"label": "10", "x": 27.951}, {"label": "9", "x": 31.631}, {"label": "8", "x": 35.307}, {"label": "7.4", "x": 37.403}, {"label": "7", "x": 38.979}, {"label": "6", "x": 43.023}, {"label": "5", "x": 47.802}, {"label": "4", "x": 51.841}, {"label": "3", "x": 56.253}, {"label": "2", "x": 62.503}, {"label": "1", "x": 68.381}], "rows": [{"label": "F", "y": 21.561}, {"label": "E", "y": 28.377}, {"label": "D", "y": 37.468}, {"label": "C", "y": 48.255}, {"label": "B", "y": 58.484}, {"label": "A", "y": 70.128}], "source": "read from the grid bubbles on DMS3 Second Floor.pdf"}}}, "roomCoords": {"DSM4": {"Ground Floor": {"Process Corridor (537-01041)": {"x": 35.5, "y": 51.2}, "Process Corridor (537-01042)": {"x": 42.9, "y": 36.3}, "Process Corridor (537-01043)": {"x": 25.7, "y": 48.3}, "Stair 1 (537-01001)": {"x": 28.8, "y": 76.9}, "Stair 2 (537-01002)": {"x": 46.1, "y": 21.3}, "Lower Production Cell Culture (537-01660)": {"x": 31.7, "y": 39.6}, "WIP Lab (537-01661)": {"x": 21.9, "y": 27.7}, "Open Area (537-01662)": {"x": 27.0, "y": 29.7}, "Sprinkler Riser Room (537-01260)": {"x": 34.5, "y": 28.4}, "Campaign Equipment Storage (537-01204)": {"x": 40.3, "y": 29.1}, "Mechanical (537-01205)": {"x": 34.9, "y": 30.8}, "Mechanical Equipment (537-01209)": {"x": 48.1, "y": 27.6}, "HVAC Mechanical (537-01202)": {"x": 48.0, "y": 33.5}, "Shaft (537-01210)": {"x": 44.3, "y": 23.9}, "WFI Stills (537-01208)": {"x": 57.2, "y": 28.1}, "Water Systems (537-01201)": {"x": 63.1, "y": 44.7}, "Waste Systems (537-01206)": {"x": 38.1, "y": 46.4}, "Janitor (537-01203)": {"x": 45.2, "y": 39.6}, "Telecom (537-01250)": {"x": 47.4, "y": 43.1}, "IDF (537-01251)": {"x": 47.4, "y": 46.6}, "Electrical Closet (537-01230)": {"x": 56.2, "y": 54.6}, "Electrical Closet (537-01231)": {"x": 27.0, "y": 43.1}, "Harvest (537-01680)": {"x": 16.1, "y": 40.2}, "JC (537-01683)": {"x": 18.1, "y": 44.7}, "MAL (537-01681)": {"x": 21.6, "y": 45.1}, "PAL (537-01682)": {"x": 18.4, "y": 48.0}, "Work Room (537-01684)": {"x": 15.2, "y": 50.6}, "Ceiling Access (537-01633)": {"x": 11.4, "y": 55.2}, "MAL (537-01631)": {"x": 20.6, "y": 55.1}, "PAL Out (537-01621)": {"x": 23.4, "y": 55.1}, "Column Packing (537-01630)": {"x": 17.2, "y": 61.3}, "Cold Room (537-01622)": {"x": 20.9, "y": 65.8}, "Filter Assembly Room (537-01625)": {"x": 39.1, "y": 55.7}, "Initial Purification (537-01620)": {"x": 38.9, "y": 70.9}, "Dirty VRC (537-10012)": {"x": 52.2, "y": 50.8}, "Clean VRC (537-10011)": {"x": 60.1, "y": 51.0}, "Product Hold (537-01605)": {"x": 60.3, "y": 54.8}, "CNC Storage (537-01200)": {"x": 65.8, "y": 55.0}, "Bulk Fill (537-01610)": {"x": 65.5, "y": 60.4}, "Clean Staging (537-01603)": {"x": 56.4, "y": 61.3}, "Cold Pass Through (537-01613)": {"x": 69.4, "y": 62.6}, "PAL (537-01611)": {"x": 63.5, "y": 66.2}, "MAL (537-01612)": {"x": 66.1, "y": 66.2}, "MAL (537-01602)": {"x": 66.1, "y": 70.0}, "JC (537-01604)": {"x": 54.7, "y": 73.7}, "Final Purification (537-01600)": {"x": 60.6, "y": 72.1}, "PAL In (537-01601)": {"x": 66.0, "y": 73.5}}, "Ground Floor Interstitial": {"Walk-On Ceiling - Ground Floor (537-05960)": {"x": 34.4, "y": 73.5}, "Electrical Closet - Open to Below (537-01230)": {"x": 54.1, "y": 50.0}, "HVAC Mechanical - Open to Below (537-01202)": {"x": 45.0, "y": 30.3}, "Telecom - Open to Below (537-01250)": {"x": 43.0, "y": 38.2}, "IDF - Open to Below (537-01251)": {"x": 43.0, "y": 41.6}}, "First Floor": {"Process Corridor (537-10040)": {"x": 37.1, "y": 46.2}, "Process Corridor (537-10043)": {"x": 20.6, "y": 42.0}, "Corridor (537-10042)": {"x": 21.2, "y": 60.9}, "Stair 1 (537-10001)": {"x": 26.6, "y": 72.0}, "Stair 2 (537-10002)": {"x": 40.1, "y": 15.9}, "Upper Production Cell Culture (537-10660)": {"x": 29.9, "y": 23.9}, "JC (537-10661)": {"x": 21.4, "y": 22.8}, "Process Mechanical (537-10645)": {"x": 54.2, "y": 25.1}, "Process Mechanical (537-10651)": {"x": 37.7, "y": 39.3}, "Process Mechanical (537-10653)": {"x": 29.5, "y": 46.5}, "Mechanical/Utility (537-10201)": {"x": 60.0, "y": 24.0}, "Electrical Room (537-10230)": {"x": 18.8, "y": 39.0}, "HVAC Mechanical (537-10200)": {"x": 59.9, "y": 64.8}, "HVAC Mechanical (537-10204)": {"x": 16.2, "y": 45.5}, "Upstream CIP (537-10203)": {"x": 26.0, "y": 43.0}, "Upstream Post Autoclave Staging (537-10654)": {"x": 26.0, "y": 39.2}, "Upstream Clean Staging (537-10652)": {"x": 34.1, "y": 40.9}, "Upstream Dirty Staging (537-10650)": {"x": 40.5, "y": 40.6}, "WIP Lab (537-10644)": {"x": 43.0, "y": 40.1}, "Seed Cell Culture (537-10640)": {"x": 47.0, "y": 33.1}, "MAL/PAL (537-10632)": {"x": 46.6, "y": 39.1}, "Inoculum Lab (537-10630)": {"x": 51.8, "y": 41.5}, "JC (537-10643)": {"x": 44.7, "y": 36.2}, "MAL (537-10642)": {"x": 45.2, "y": 42.3}, "PAL (537-10641)": {"x": 45.1, "y": 45.7}, "CNC Storage (537-10631)": {"x": 50.6, "y": 46.1}, "Janitor (537-10205)": {"x": 57.3, "y": 46.0}, "IDF (537-10251)": {"x": 51.3, "y": 50.1}, "Telecom Room (537-10250)": {"x": 55.5, "y": 51.7}, "Central CIP (537-10202)": {"x": 66.3, "y": 50.2}, "Dirty VRC (537-10012)": {"x": 51.9, "y": 56.9}, "Clean VRC (537-10011)": {"x": 56.7, "y": 57.3}, "Buffer Hold (537-10620)": {"x": 33.4, "y": 60.7}, "Shaft (537-10210)": {"x": 45.3, "y": 16.0}}, "First Floor Interstitial": {"Electrical Room - Open to Below (537-10230)": {"x": 18.7, "y": 39.4}, "HVAC Mechanical - Open to Below (537-10200)": {"x": 59.3, "y": 63.5}, "Telecom Room - Open to Below (537-10250)": {"x": 53.1, "y": 49.8}}, "Second Floor": {"Process Corridor (537-20040)": {"x": 67.8, "y": 41.5}, "Process Corridor (537-20041)": {"x": 53.9, "y": 23.0}, "Stair 1 (537-20001)": {"x": 26.9, "y": 72.1}, "Stair 2 (537-20002)": {"x": 41.6, "y": 16.7}, "Louver Plenum (537-20202)": {"x": 13.3, "y": 73.4}, "Louver Plenum (537-20203)": {"x": 13.9, "y": 18.8}, "Electrical Substation (537-20233)": {"x": 29.9, "y": 27.6}, "Electrical Room (537-20231)": {"x": 41.2, "y": 32.2}, "Electrical Room (537-20232)": {"x": 33.6, "y": 22.6}, "Electrical Closet (537-20230)": {"x": 40.8, "y": 42.0}, "HVAC Mechanical (537-20200)": {"x": 20.6, "y": 41.9}, "Telecom Room (537-20250)": {"x": 41.3, "y": 45.8}, "IDF (537-20251)": {"x": 46.5, "y": 46.1}, "WIP Lab (537-20648)": {"x": 51.2, "y": 39.0}, "JC (537-20646)": {"x": 52.8, "y": 41.0}, "JC (537-20604)": {"x": 36.6, "y": 68.1}, "JC (537-20622)": {"x": 67.3, "y": 49.1}, "Media Prep (537-20640)": {"x": 60.1, "y": 40.8}, "Media Tech Space (537-20649)": {"x": 54.7, "y": 26.0}, "Media Hold/Perfusion (537-20660)": {"x": 48.3, "y": 31.5}, "Cold Room (537-20647)": {"x": 63.9, "y": 25.4}, "Cold MAL (537-20641)": {"x": 64.2, "y": 29.5}, "MAL Out (537-20642)": {"x": 64.5, "y": 33.9}, "MAL In (537-20643)": {"x": 63.8, "y": 38.5}, "FTS Room (537-20645)": {"x": 53.4, "y": 29.6}, "Process Mechanical (537-20625)": {"x": 53.0, "y": 46.3}, "Process Mechanical (537-20623)": {"x": 60.0, "y": 54.1}, "Dirty Wash Staging (537-20626)": {"x": 52.7, "y": 51.3}, "Clean Wash Staging (537-20624)": {"x": 58.9, "y": 50.8}, "Post Autoclave Staging (537-20620)": {"x": 64.1, "y": 51.0}, "Dirty VRC (537-10012)": {"x": 50.4, "y": 56.0}, "Clean VRC (537-10011)": {"x": 50.4, "y": 57.6}, "Buffer Prep (537-20600)": {"x": 50.6, "y": 66.9}, "Janitor (537-20650)": {"x": 50.4, "y": 26.3}, "Shaft (537-20210)": {"x": 45.3, "y": 17.1}}, "Second Floor Interstitial": {"Walk-On Ceiling - Second Floor (537-25960)": {"x": 54.1, "y": 76.6}, "Electrical Room - Open to Below (537-20231)": {"x": 38.4, "y": 28.6}, "HVAC Mechanical - Open to Below (537-20200)": {"x": 33.3, "y": 43.6}, "Media Tech Space - Open to Below (537-20649)": {"x": 55.0, "y": 27.7}}}}};
+const SEED = {"dataVersion": "2026-08-15-dismantle-dates", "generated": "2026-07-03", "rooms": {"DSM4": {"Ground Floor": ["Process Corridor (537-01041)", "Process Corridor (537-01042)", "Process Corridor (537-01043)", "Stair 1 (537-01001)", "Stair 2 (537-01002)", "Lower Production Cell Culture (537-01660)", "WIP Lab (537-01661)", "Open Area (537-01662)", "Sprinkler Riser Room (537-01260)", "Campaign Equipment Storage (537-01204)", "Mechanical (537-01205)", "Mechanical Equipment (537-01209)", "HVAC Mechanical (537-01202)", "Shaft (537-01210)", "WFI Stills (537-01208)", "Water Systems (537-01201)", "Waste Systems (537-01206)", "Janitor (537-01203)", "Telecom (537-01250)", "IDF (537-01251)", "Electrical Closet (537-01230)", "Electrical Closet (537-01231)", "Harvest (537-01680)", "JC (537-01683)", "MAL (537-01681)", "PAL (537-01682)", "Work Room (537-01684)", "Ceiling Access (537-01633)", "MAL (537-01631)", "PAL Out (537-01621)", "Column Packing (537-01630)", "Cold Room (537-01622)", "Filter Assembly Room (537-01625)", "Initial Purification (537-01620)", "Dirty VRC (537-10012)", "Clean VRC (537-10011)", "Product Hold (537-01605)", "CNC Storage (537-01200)", "Bulk Fill (537-01610)", "Clean Staging (537-01603)", "Cold Pass Through (537-01613)", "PAL (537-01611)", "MAL (537-01612)", "MAL (537-01602)", "JC (537-01604)", "Final Purification (537-01600)", "PAL In (537-01601)", "Chrom Bay 1", "Chrom Bay 2", "Chrom Bay 3", "Flex Bay (Future)", "Other / Not Listed"], "Ground Floor Interstitial": ["Walk-On Ceiling - Ground Floor (537-05960)", "Electrical Closet - Open to Below (537-01230)", "HVAC Mechanical - Open to Below (537-01202)", "Telecom - Open to Below (537-01250)", "IDF - Open to Below (537-01251)", "Walkable Ceiling Zone, Typ.", "Non-Walkable Ceiling Zone", "Other / Not Listed"], "First Floor": ["Process Corridor (537-10040)", "Process Corridor (537-10043)", "Corridor (537-10042)", "Stair 1 (537-10001)", "Stair 2 (537-10002)", "Upper Production Cell Culture (537-10660)", "JC (537-10661)", "Process Mechanical (537-10645)", "Process Mechanical (537-10651)", "Process Mechanical (537-10653)", "Mechanical/Utility (537-10201)", "Electrical Room (537-10230)", "HVAC Mechanical (537-10200)", "HVAC Mechanical (537-10204)", "Upstream CIP (537-10203)", "Upstream Post Autoclave Staging (537-10654)", "Upstream Clean Staging (537-10652)", "Upstream Dirty Staging (537-10650)", "WIP Lab (537-10644)", "Seed Cell Culture (537-10640)", "MAL/PAL (537-10632)", "Inoculum Lab (537-10630)", "JC (537-10643)", "MAL (537-10642)", "PAL (537-10641)", "CNC Storage (537-10631)", "Janitor (537-10205)", "IDF (537-10251)", "Telecom Room (537-10250)", "Central CIP (537-10202)", "Dirty VRC (537-10012)", "Clean VRC (537-10011)", "Buffer Hold (537-10620)", "Shaft (537-10210)", "Other / Not Listed"], "First Floor Interstitial": ["Electrical Room - Open to Below (537-10230)", "HVAC Mechanical - Open to Below (537-10200)", "Telecom Room - Open to Below (537-10250)", "Lift Zone", "Walkable Ceiling Zone, Typ.", "Non-Walkable Ceiling Zone", "Other / Not Listed"], "Second Floor": ["Process Corridor (537-20040)", "Process Corridor (537-20041)", "Stair 1 (537-20001)", "Stair 2 (537-20002)", "Louver Plenum (537-20202)", "Louver Plenum (537-20203)", "Electrical Substation (537-20233)", "Electrical Room (537-20231)", "Electrical Room (537-20232)", "Electrical Closet (537-20230)", "HVAC Mechanical (537-20200)", "Telecom Room (537-20250)", "IDF (537-20251)", "WIP Lab (537-20648)", "JC (537-20646)", "JC (537-20604)", "JC (537-20622)", "Media Prep (537-20640)", "Media Tech Space (537-20649)", "Media Hold/Perfusion (537-20660)", "Cold Room (537-20647)", "Cold MAL (537-20641)", "MAL Out (537-20642)", "MAL In (537-20643)", "FTS Room (537-20645)", "Process Mechanical (537-20625)", "Process Mechanical (537-20623)", "Dirty Wash Staging (537-20626)", "Clean Wash Staging (537-20624)", "Post Autoclave Staging (537-20620)", "Dirty VRC (537-10012)", "Clean VRC (537-10011)", "Buffer Prep (537-20600)", "Janitor (537-20650)", "Shaft (537-20210)", "Other / Not Listed"], "Second Floor Interstitial": ["Walk-On Ceiling - Second Floor (537-25960)", "Electrical Room - Open to Below (537-20231)", "HVAC Mechanical - Open to Below (537-20200)", "Media Tech Space - Open to Below (537-20649)", "Walkable Ceiling Zone, Typ.", "Non-Walkable Ceiling Zone", "Other / Not Listed"]}, "DSM1": {"General Area": []}, "DSM2": {"General Area": []}, "DSM3": {"General Area": []}, "Warehouse": {"General Area": []}, "HB2": {"General Area": []}, "CUB": {"General Area": []}, "CUB Expansion": {"General Area": []}, "DPFG": {"General Area": []}, "Lab/Admin Building": {"General Area": []}, "Tank Farm": {"General Area": []}, "Spine": {"General Area": []}, "Site": {"General Area": []}}, "buildingName": "Project Aura / Pixie Dust Campus \u2014 Pilot on Building 537 (DSM4)", "buildings": ["DSM4", "DSM1", "DSM2", "DSM3", "Warehouse", "HB2", "CUB", "CUB Expansion", "DPFG", "Lab/Admin Building", "Tank Farm", "Spine", "Site"], "buildingFloors": {"DSM4": ["Ground Floor", "Ground Floor Interstitial", "First Floor", "First Floor Interstitial", "Second Floor", "Second Floor Interstitial"], "DSM1": ["Ground Floor", "Level 2"], "DSM2": ["General Area"], "DSM3": ["Ground Floor", "First Floor", "Second Floor"], "Warehouse": ["General Area"], "HB2": ["Ground Level", "Roof"], "CUB": ["Ground Floor", "First Floor", "Roof"], "CUB Expansion": ["Ground Floor", "Level 1"], "DPFG": ["General Area"], "Lab/Admin Building": ["General Area"], "Tank Farm": ["General Area"], "Spine": ["Ground Floor", "Second Floor", "Roof"], "Site": ["Exterior"]}, "directory": {"gc": [], "gcPersonnel": [], "builders": [], "builderPersonnel": [], "contractors": [], "safety": []}, "disciplines": ["Piping", "Structural", "Steel", "Electrical", "Instrumentation", "HVAC", "Mechanical", "Insulation", "Paint", "Safety", "Siting", "Consultant", "Other"], "durations": ["1 week", "2 weeks", "1 month", "2 months"], "floors": ["Ground Floor", "Ground Floor Interstitial", "First Floor", "First Floor Interstitial", "Second Floor", "Second Floor Interstitial"], "records": [], "notifications": [], "history": [], "awaitingErection": [], "grid": {"DSM4": {"First Floor": {"cols": [{"label": "13", "x": 11.785}, {"label": "12", "x": 17.667}, {"label": "11", "x": 23.917}, {"label": "10", "x": 27.962}, {"label": "9", "x": 31.638}, {"label": "8", "x": 35.315}, {"label": "7.4", "x": 37.398}, {"label": "7", "x": 38.991}, {"label": "6", "x": 43.035}, {"label": "5", "x": 47.815}, {"label": "4", "x": 51.859}, {"label": "3", "x": 56.27}, {"label": "2", "x": 62.52}, {"label": "1", "x": 68.403}], "rows": [{"label": "F", "y": 21.812}, {"label": "E", "y": 28.63}, {"label": "D", "y": 37.721}, {"label": "C", "y": 48.516}, {"label": "B", "y": 58.744}, {"label": "A", "y": 70.36}], "source": "auto-detected from the floor plan image"}, "First Floor Interstitial": {"cols": [{"label": "13", "x": 11.785}, {"label": "12", "x": 17.667}, {"label": "11", "x": 23.917}, {"label": "10", "x": 27.962}, {"label": "9", "x": 31.638}, {"label": "8", "x": 35.315}, {"label": "7", "x": 38.991}, {"label": "6", "x": 43.035}, {"label": "5", "x": 47.815}, {"label": "4", "x": 51.859}, {"label": "3", "x": 56.27}, {"label": "2", "x": 62.52}, {"label": "1", "x": 68.403}], "rows": [{"label": "F", "y": 21.812}, {"label": "E", "y": 28.63}, {"label": "D", "y": 37.721}, {"label": "C", "y": 48.516}, {"label": "B", "y": 58.744}, {"label": "A", "y": 70.36}], "source": "auto-detected from the floor plan image"}, "Ground Floor": {"cols": [{"label": "13", "x": 13.787}, {"label": "12", "x": 19.669}, {"label": "11", "x": 25.919}, {"label": "10", "x": 29.963}, {"label": "9", "x": 33.64}, {"label": "8", "x": 37.316}, {"label": "7.4", "x": 39.4}, {"label": "7", "x": 40.993}, {"label": "6", "x": 45.037}, {"label": "5", "x": 49.816}, {"label": "4", "x": 53.86}, {"label": "3", "x": 58.272}, {"label": "2", "x": 64.522}, {"label": "1", "x": 70.404}], "rows": [{"label": "F", "y": 26.641}, {"label": "E", "y": 33.491}, {"label": "D", "y": 42.551}, {"label": "C", "y": 53.314}, {"label": "B", "y": 63.542}, {"label": "A", "y": 75.221}], "source": "auto-detected from the floor plan image"}, "Ground Floor Interstitial": {"cols": [{"label": "13", "x": 11.785}, {"label": "12", "x": 17.667}, {"label": "11", "x": 23.917}, {"label": "10", "x": 27.962}, {"label": "9", "x": 31.638}, {"label": "8", "x": 35.315}, {"label": "7", "x": 38.991}, {"label": "6", "x": 43.035}, {"label": "5", "x": 47.815}, {"label": "4", "x": 51.859}, {"label": "3", "x": 56.27}, {"label": "2", "x": 62.52}, {"label": "1", "x": 68.403}], "rows": [{"label": "F", "y": 21.812}, {"label": "E", "y": 28.63}, {"label": "D", "y": 37.721}, {"label": "C", "y": 48.516}, {"label": "B", "y": 58.744}, {"label": "A", "y": 70.36}], "source": "auto-detected from the floor plan image"}, "Second Floor": {"cols": [{"label": "13", "x": 11.785}, {"label": "12", "x": 17.667}, {"label": "11", "x": 23.917}, {"label": "10", "x": 27.962}, {"label": "9", "x": 31.638}, {"label": "8", "x": 35.315}, {"label": "7.4", "x": 37.398}, {"label": "7", "x": 38.991}, {"label": "6", "x": 43.035}, {"label": "5", "x": 47.815}, {"label": "4", "x": 51.859}, {"label": "3", "x": 56.27}, {"label": "2", "x": 62.52}, {"label": "1", "x": 68.403}], "rows": [{"label": "F", "y": 21.749}, {"label": "E", "y": 28.567}, {"label": "D", "y": 37.658}, {"label": "C", "y": 48.453}, {"label": "B", "y": 58.681}, {"label": "A", "y": 70.297}], "source": "auto-detected from the floor plan image"}, "Second Floor Interstitial": {"cols": [{"label": "13", "x": 11.785}, {"label": "12", "x": 17.667}, {"label": "11", "x": 23.917}, {"label": "10", "x": 27.962}, {"label": "9", "x": 31.638}, {"label": "8", "x": 35.315}, {"label": "7", "x": 38.991}, {"label": "6", "x": 43.035}, {"label": "5", "x": 47.794}, {"label": "4", "x": 51.838}, {"label": "3", "x": 56.25}, {"label": "2", "x": 62.48}, {"label": "1", "x": 68.362}], "rows": [{"label": "F", "y": 24.653}, {"label": "E", "y": 31.471}, {"label": "D", "y": 40.562}, {"label": "C", "y": 51.326}, {"label": "B", "y": 61.553}, {"label": "A", "y": 73.201}], "source": "auto-detected from the floor plan image"}}, "DSM3": {"Ground Floor": {"cols": [{"label": "13", "x": 13.79}, {"label": "12", "x": 19.672}, {"label": "11", "x": 25.917}, {"label": "10", "x": 29.961}, {"label": "9", "x": 33.64}, {"label": "8", "x": 37.312}, {"label": "7.4", "x": 39.412}, {"label": "7", "x": 40.988}, {"label": "6", "x": 45.032}, {"label": "5", "x": 49.807}, {"label": "4", "x": 53.851}, {"label": "3", "x": 58.263}, {"label": "2", "x": 64.508}, {"label": "1", "x": 70.391}], "rows": [{"label": "F", "y": 26.47}, {"label": "E", "y": 33.278}, {"label": "D", "y": 42.369}, {"label": "C", "y": 53.157}, {"label": "B", "y": 63.386}, {"label": "A", "y": 75.03}], "source": "read from the grid bubbles on DMS3 Ground Floor.pdf"}, "First Floor": {"cols": [{"label": "13", "x": 11.785}, {"label": "12", "x": 17.662}, {"label": "11", "x": 23.912}, {"label": "10", "x": 27.952}, {"label": "9", "x": 31.631}, {"label": "8", "x": 35.307}, {"label": "7.4", "x": 37.403}, {"label": "7", "x": 38.979}, {"label": "6", "x": 43.023}, {"label": "5", "x": 47.802}, {"label": "4", "x": 51.841}, {"label": "3", "x": 56.253}, {"label": "2", "x": 62.503}, {"label": "1", "x": 68.381}], "rows": [{"label": "F", "y": 21.869}, {"label": "E", "y": 28.685}, {"label": "D", "y": 37.776}, {"label": "C", "y": 48.564}, {"label": "B", "y": 58.792}, {"label": "A", "y": 70.436}], "source": "read from the grid bubbles on DMS3 First Floor.pdf"}, "Second Floor": {"cols": [{"label": "13", "x": 11.78}, {"label": "12", "x": 17.662}, {"label": "11", "x": 23.912}, {"label": "10", "x": 27.951}, {"label": "9", "x": 31.631}, {"label": "8", "x": 35.307}, {"label": "7.4", "x": 37.403}, {"label": "7", "x": 38.979}, {"label": "6", "x": 43.023}, {"label": "5", "x": 47.802}, {"label": "4", "x": 51.841}, {"label": "3", "x": 56.253}, {"label": "2", "x": 62.503}, {"label": "1", "x": 68.381}], "rows": [{"label": "F", "y": 21.561}, {"label": "E", "y": 28.377}, {"label": "D", "y": 37.468}, {"label": "C", "y": 48.255}, {"label": "B", "y": 58.484}, {"label": "A", "y": 70.128}], "source": "read from the grid bubbles on DMS3 Second Floor.pdf"}}}, "roomCoords": {"DSM4": {"Ground Floor": {"Process Corridor (537-01041)": {"x": 35.5, "y": 51.2}, "Process Corridor (537-01042)": {"x": 42.9, "y": 36.3}, "Process Corridor (537-01043)": {"x": 25.7, "y": 48.3}, "Stair 1 (537-01001)": {"x": 28.8, "y": 76.9}, "Stair 2 (537-01002)": {"x": 46.1, "y": 21.3}, "Lower Production Cell Culture (537-01660)": {"x": 31.7, "y": 39.6}, "WIP Lab (537-01661)": {"x": 21.9, "y": 27.7}, "Open Area (537-01662)": {"x": 27.0, "y": 29.7}, "Sprinkler Riser Room (537-01260)": {"x": 34.5, "y": 28.4}, "Campaign Equipment Storage (537-01204)": {"x": 40.3, "y": 29.1}, "Mechanical (537-01205)": {"x": 34.9, "y": 30.8}, "Mechanical Equipment (537-01209)": {"x": 48.1, "y": 27.6}, "HVAC Mechanical (537-01202)": {"x": 48.0, "y": 33.5}, "Shaft (537-01210)": {"x": 44.3, "y": 23.9}, "WFI Stills (537-01208)": {"x": 57.2, "y": 28.1}, "Water Systems (537-01201)": {"x": 63.1, "y": 44.7}, "Waste Systems (537-01206)": {"x": 38.1, "y": 46.4}, "Janitor (537-01203)": {"x": 45.2, "y": 39.6}, "Telecom (537-01250)": {"x": 47.4, "y": 43.1}, "IDF (537-01251)": {"x": 47.4, "y": 46.6}, "Electrical Closet (537-01230)": {"x": 56.2, "y": 54.6}, "Electrical Closet (537-01231)": {"x": 27.0, "y": 43.1}, "Harvest (537-01680)": {"x": 16.1, "y": 40.2}, "JC (537-01683)": {"x": 18.1, "y": 44.7}, "MAL (537-01681)": {"x": 21.6, "y": 45.1}, "PAL (537-01682)": {"x": 18.4, "y": 48.0}, "Work Room (537-01684)": {"x": 15.2, "y": 50.6}, "Ceiling Access (537-01633)": {"x": 11.4, "y": 55.2}, "MAL (537-01631)": {"x": 20.6, "y": 55.1}, "PAL Out (537-01621)": {"x": 23.4, "y": 55.1}, "Column Packing (537-01630)": {"x": 17.2, "y": 61.3}, "Cold Room (537-01622)": {"x": 20.9, "y": 65.8}, "Filter Assembly Room (537-01625)": {"x": 39.1, "y": 55.7}, "Initial Purification (537-01620)": {"x": 38.9, "y": 70.9}, "Dirty VRC (537-10012)": {"x": 52.2, "y": 50.8}, "Clean VRC (537-10011)": {"x": 60.1, "y": 51.0}, "Product Hold (537-01605)": {"x": 60.3, "y": 54.8}, "CNC Storage (537-01200)": {"x": 65.8, "y": 55.0}, "Bulk Fill (537-01610)": {"x": 65.5, "y": 60.4}, "Clean Staging (537-01603)": {"x": 56.4, "y": 61.3}, "Cold Pass Through (537-01613)": {"x": 69.4, "y": 62.6}, "PAL (537-01611)": {"x": 63.5, "y": 66.2}, "MAL (537-01612)": {"x": 66.1, "y": 66.2}, "MAL (537-01602)": {"x": 66.1, "y": 70.0}, "JC (537-01604)": {"x": 54.7, "y": 73.7}, "Final Purification (537-01600)": {"x": 60.6, "y": 72.1}, "PAL In (537-01601)": {"x": 66.0, "y": 73.5}}, "Ground Floor Interstitial": {"Walk-On Ceiling - Ground Floor (537-05960)": {"x": 34.4, "y": 73.5}, "Electrical Closet - Open to Below (537-01230)": {"x": 54.1, "y": 50.0}, "HVAC Mechanical - Open to Below (537-01202)": {"x": 45.0, "y": 30.3}, "Telecom - Open to Below (537-01250)": {"x": 43.0, "y": 38.2}, "IDF - Open to Below (537-01251)": {"x": 43.0, "y": 41.6}}, "First Floor": {"Process Corridor (537-10040)": {"x": 37.1, "y": 46.2}, "Process Corridor (537-10043)": {"x": 20.6, "y": 42.0}, "Corridor (537-10042)": {"x": 21.2, "y": 60.9}, "Stair 1 (537-10001)": {"x": 26.6, "y": 72.0}, "Stair 2 (537-10002)": {"x": 40.1, "y": 15.9}, "Upper Production Cell Culture (537-10660)": {"x": 29.9, "y": 23.9}, "JC (537-10661)": {"x": 21.4, "y": 22.8}, "Process Mechanical (537-10645)": {"x": 54.2, "y": 25.1}, "Process Mechanical (537-10651)": {"x": 37.7, "y": 39.3}, "Process Mechanical (537-10653)": {"x": 29.5, "y": 46.5}, "Mechanical/Utility (537-10201)": {"x": 60.0, "y": 24.0}, "Electrical Room (537-10230)": {"x": 18.8, "y": 39.0}, "HVAC Mechanical (537-10200)": {"x": 59.9, "y": 64.8}, "HVAC Mechanical (537-10204)": {"x": 16.2, "y": 45.5}, "Upstream CIP (537-10203)": {"x": 26.0, "y": 43.0}, "Upstream Post Autoclave Staging (537-10654)": {"x": 26.0, "y": 39.2}, "Upstream Clean Staging (537-10652)": {"x": 34.1, "y": 40.9}, "Upstream Dirty Staging (537-10650)": {"x": 40.5, "y": 40.6}, "WIP Lab (537-10644)": {"x": 43.0, "y": 40.1}, "Seed Cell Culture (537-10640)": {"x": 47.0, "y": 33.1}, "MAL/PAL (537-10632)": {"x": 46.6, "y": 39.1}, "Inoculum Lab (537-10630)": {"x": 51.8, "y": 41.5}, "JC (537-10643)": {"x": 44.7, "y": 36.2}, "MAL (537-10642)": {"x": 45.2, "y": 42.3}, "PAL (537-10641)": {"x": 45.1, "y": 45.7}, "CNC Storage (537-10631)": {"x": 50.6, "y": 46.1}, "Janitor (537-10205)": {"x": 57.3, "y": 46.0}, "IDF (537-10251)": {"x": 51.3, "y": 50.1}, "Telecom Room (537-10250)": {"x": 55.5, "y": 51.7}, "Central CIP (537-10202)": {"x": 66.3, "y": 50.2}, "Dirty VRC (537-10012)": {"x": 51.9, "y": 56.9}, "Clean VRC (537-10011)": {"x": 56.7, "y": 57.3}, "Buffer Hold (537-10620)": {"x": 33.4, "y": 60.7}, "Shaft (537-10210)": {"x": 45.3, "y": 16.0}}, "First Floor Interstitial": {"Electrical Room - Open to Below (537-10230)": {"x": 18.7, "y": 39.4}, "HVAC Mechanical - Open to Below (537-10200)": {"x": 59.3, "y": 63.5}, "Telecom Room - Open to Below (537-10250)": {"x": 53.1, "y": 49.8}}, "Second Floor": {"Process Corridor (537-20040)": {"x": 67.8, "y": 41.5}, "Process Corridor (537-20041)": {"x": 53.9, "y": 23.0}, "Stair 1 (537-20001)": {"x": 26.9, "y": 72.1}, "Stair 2 (537-20002)": {"x": 41.6, "y": 16.7}, "Louver Plenum (537-20202)": {"x": 13.3, "y": 73.4}, "Louver Plenum (537-20203)": {"x": 13.9, "y": 18.8}, "Electrical Substation (537-20233)": {"x": 29.9, "y": 27.6}, "Electrical Room (537-20231)": {"x": 41.2, "y": 32.2}, "Electrical Room (537-20232)": {"x": 33.6, "y": 22.6}, "Electrical Closet (537-20230)": {"x": 40.8, "y": 42.0}, "HVAC Mechanical (537-20200)": {"x": 20.6, "y": 41.9}, "Telecom Room (537-20250)": {"x": 41.3, "y": 45.8}, "IDF (537-20251)": {"x": 46.5, "y": 46.1}, "WIP Lab (537-20648)": {"x": 51.2, "y": 39.0}, "JC (537-20646)": {"x": 52.8, "y": 41.0}, "JC (537-20604)": {"x": 36.6, "y": 68.1}, "JC (537-20622)": {"x": 67.3, "y": 49.1}, "Media Prep (537-20640)": {"x": 60.1, "y": 40.8}, "Media Tech Space (537-20649)": {"x": 54.7, "y": 26.0}, "Media Hold/Perfusion (537-20660)": {"x": 48.3, "y": 31.5}, "Cold Room (537-20647)": {"x": 63.9, "y": 25.4}, "Cold MAL (537-20641)": {"x": 64.2, "y": 29.5}, "MAL Out (537-20642)": {"x": 64.5, "y": 33.9}, "MAL In (537-20643)": {"x": 63.8, "y": 38.5}, "FTS Room (537-20645)": {"x": 53.4, "y": 29.6}, "Process Mechanical (537-20625)": {"x": 53.0, "y": 46.3}, "Process Mechanical (537-20623)": {"x": 60.0, "y": 54.1}, "Dirty Wash Staging (537-20626)": {"x": 52.7, "y": 51.3}, "Clean Wash Staging (537-20624)": {"x": 58.9, "y": 50.8}, "Post Autoclave Staging (537-20620)": {"x": 64.1, "y": 51.0}, "Dirty VRC (537-10012)": {"x": 50.4, "y": 56.0}, "Clean VRC (537-10011)": {"x": 50.4, "y": 57.6}, "Buffer Prep (537-20600)": {"x": 50.6, "y": 66.9}, "Janitor (537-20650)": {"x": 50.4, "y": 26.3}, "Shaft (537-20210)": {"x": 45.3, "y": 17.1}}, "Second Floor Interstitial": {"Walk-On Ceiling - Second Floor (537-25960)": {"x": 54.1, "y": 76.6}, "Electrical Room - Open to Below (537-20231)": {"x": 38.4, "y": 28.6}, "HVAC Mechanical - Open to Below (537-20200)": {"x": 33.3, "y": 43.6}, "Media Tech Space - Open to Below (537-20649)": {"x": 55.0, "y": 27.7}}}}};
 const IMAGES = {};
 </script>
 
@@ -2266,6 +2311,7 @@ const TABS = [
   {id:'history',   label:'History',     group:'primary', perm:'viewAllRequests'},
   {id:'gcarea',    label:'GC Area',     group:'role'},
   {id:'foreman',   label:'Foreman Area',group:'role'},
+  {id:'manpower',  label:'Manpower',    group:'primary', perm:'viewAllRequests'},
 ];
 // The tabs actually shown to whoever is using the app right now.
 function visibleTabs(){
@@ -3435,6 +3481,7 @@ function loadState(){
     /* One entry per AMECO weekly report that has been uploaded.
        Kept in state (not SEED) because it grows every week. */
     snapshots: JSON.parse(JSON.stringify(SEED.snapshots || [])),
+    manpower:  JSON.parse(JSON.stringify(SEED.manpower  || [])),
     notifications: JSON.parse(JSON.stringify(SEED.notifications)),
     directory: JSON.parse(JSON.stringify(SEED.directory)),
     nextNum: 2003,
@@ -5379,6 +5426,7 @@ function renderCurrent(){
   else if(id==='floorplan') renderFloorPlan();
   else if(id==='all') renderAll();
   else if(id==='history') renderHistory();
+  else if(id==='manpower') renderManpower();
   else if(id==='gcarea') renderGcArea();
   else if(id==='foreman') renderForemanArea();
 }
@@ -5771,6 +5819,250 @@ async function weeklyUploadFile(file){
   }
 }
 
+
+/* ================= MANPOWER =================================
+   How many people AMECO actually has on this site, week by week.
+
+   BDiaz asked for this to answer a question the scaffold data alone
+   cannot: is the builder staffing up or quietly cutting back? A backlog
+   that grows while the crew shrinks is the thing you want to catch in
+   week two, not month three.
+
+   Entered by hand for now. AMECO has not been asked for a roster or
+   timesheet file yet, and inventing an import format before seeing a
+   real file is how you end up with a parser nobody can feed. When a file
+   turns up, it fills this same structure -- weekEnding plus a count,
+   hours and rate per role -- and the rest of the page does not change.
+
+   A blank field is UNKNOWN, not zero. Recording an unknown as zero would
+   quietly drag every average down and make a full crew look like a cut. */
+
+const MP_ROLES = [
+  {id:'pm',       label:'Project Manager',  short:'PM'},
+  {id:'super',    label:'Superintendent',   short:'Super'},
+  {id:'genForem', label:'General Foreman',  short:'Gen Foreman'},
+  {id:'foreman',  label:'Foreman',          short:'Foreman'},
+  {id:'erector',  label:'Erector',          short:'Erectors'},
+  {id:'helper',   label:'Helper',           short:'Helpers'}
+];
+
+/* The builder's name lives in the directory, not in a string here. This
+   app is meant to work on the next job with a different scaffold company,
+   and a name welded into the chrome is how that stops being true. */
+function builderName(){
+  const d = (state.directory || {});
+  const pm = (d.builderPersonnel || []).filter(function(x){ return x && x.company; })[0];
+  if(pm && pm.company) return pm.company;
+  const co = (d.contractors || []).filter(function(c){ return c && c.isBuilder; })[0];
+  if(co && co.name) return co.name;
+  const seen = {};
+  (state.records || []).forEach(function(r){
+    const b = r.builder || (r.assigned && r.assigned.company);
+    if(b) seen[b] = (seen[b] || 0) + 1;
+  });
+  const top = Object.keys(seen).sort(function(a,b){ return seen[b]-seen[a]; })[0];
+  return top || 'the scaffold builder';
+}
+
+function manpowerWeeks(){
+  return (state.manpower || []).slice()
+    .sort(function(a,b){ return String(a.week).localeCompare(String(b.week)); });
+}
+function mpNum(v){ return (typeof v === 'number' && isFinite(v)) ? v : null; }
+
+/* Head, hours and cost for one week. Unknowns stay out of the totals and
+   are counted separately so the page can say how complete the week is. */
+function mpTotals(w){
+  if(!w) return null;
+  let head = 0, hours = 0, cost = 0, known = 0, blank = 0;
+  MP_ROLES.forEach(function(r){
+    const c = mpNum((w.count || {})[r.id]);
+    const h = mpNum((w.hours || {})[r.id]);
+    const p = mpNum((w.rate  || {})[r.id]);
+    if(c == null){ blank++; return; }
+    known++; head += c;
+    if(h != null){ hours += c * h; if(p != null) cost += c * h * p; }
+  });
+  return { head: head, hours: hours, cost: cost, known: known, blank: blank };
+}
+
+function renderManpower(){
+  const weeks = manpowerWeeks();
+  const ttl = document.getElementById('mpTitle');
+  if(ttl) ttl.textContent = 'Manpower — Who ' + builderName() + ' Has On Site';
+  const kpis = document.getElementById('mpKpis');
+  const note = document.getElementById('mpNote');
+  const cur  = weeks.length ? weeks[weeks.length - 1] : null;
+  const prev = weeks.length > 1 ? weeks[weeks.length - 2] : null;
+  const T = mpTotals(cur), P = mpTotals(prev);
+
+  if(!weeks.length){
+    kpis.innerHTML = '';
+    note.innerHTML = '<div class="notice info" style="margin-top:12px;">'
+      + '<b>No weeks entered yet.</b> Open <b>Add or Update a Week</b> below and put in what '
+      + builderName() + ' has on site this week. One week on its own is already useful; from the second '
+      + 'week onward this page starts showing the direction.</div>';
+    document.getElementById('mpTrend').innerHTML = '';
+    document.getElementById('mpHead').innerHTML = '';
+    document.getElementById('mpTable').innerHTML = '';
+    document.getElementById('mpPager').innerHTML = '';
+    mpRenderForm();
+    return;
+  }
+
+  const delta = function(label, val, prevVal, fmt, goodWhenUp, sub){
+    let body = fmt(val);
+    let colour = '', arrow = '';
+    if(prevVal != null && val != null && prevVal !== val){
+      const up = val > prevVal;
+      const good = goodWhenUp ? up : !up;
+      colour = ' style="color:' + (good ? 'var(--green)' : 'var(--red)') + ';"';
+      arrow = (up ? '+' : '−') + fmt(Math.abs(val - prevVal)).replace(/^[+−]/, '');
+    }
+    return '<div class="kpi"><div class="label">' + label + '</div>'
+      + '<div class="value"' + colour + '>' + body + '</div>'
+      + '<div class="kpi-note">' + (arrow ? '<b>' + arrow + '</b> vs last week &middot; ' : '') + sub + '</div></div>';
+  };
+
+  /* Ties the crew back to the work. A rising backlog against a shrinking
+     crew is the whole reason to track this. */
+  const standing = state.records.filter(function(r){ return r.tag && !r.dateDismantled; }).length;
+  const hands = (mpNum((cur.count||{}).erector) || 0) + (mpNum((cur.count||{}).helper) || 0);
+  const perHand = hands ? (standing / hands) : null;
+
+  kpis.innerHTML =
+      delta('People On Site', T.head, P ? P.head : null, function(v){ return String(v); }, true,
+            'across ' + T.known + ' of ' + MP_ROLES.length + ' roles, week ending ' + fmtDate(cur.week))
+    + delta('Hours This Week', T.hours, P ? P.hours : null,
+            function(v){ return v ? v.toLocaleString() : '—'; }, true,
+            T.hours ? 'headcount x hours each' : 'no hours entered for this week')
+    + delta('Labour Cost', T.cost, P ? P.cost : null,
+            function(v){ return v ? fmtMoney(v) : '—'; }, false,
+            T.cost ? 'hours x pay rate, this week' : 'enter pay rates to see this')
+    + '<div class="kpi"><div class="label">Scaffolds Per Hand</div>'
+      + '<div class="value">' + (perHand != null ? perHand.toFixed(1) : '—') + '</div>'
+      + '<div class="kpi-note">' + (perHand != null
+          ? standing + ' standing across ' + hands + ' erectors and helpers &mdash; '
+            + 'rises when the crew shrinks or the backlog grows'
+          : 'enter erectors and helpers to see this') + '</div></div>';
+
+  note.innerHTML = T.blank
+    ? '<div class="notice warn" style="margin-top:12px;"><b>' + T.blank + ' of '
+      + MP_ROLES.length + ' roles are blank for week ending ' + fmtDate(cur.week)
+      + '.</b> Blank means not known, so those roles are left out of every total above '
+      + 'rather than counted as zero. Fill them in and these numbers get sharper.</div>'
+    : '';
+
+  /* Headcount over time. */
+  const maxH = Math.max(1, ...weeks.map(function(w){ return mpTotals(w).head; }));
+  document.getElementById('mpTrend').innerHTML = weeks.slice().reverse().map(function(w){
+    const t = mpTotals(w);
+    return '<div class="bar-row"><div class="lbl">' + fmtDate(w.week) + '</div>'
+      + '<div class="bar-track"><div class="bar-fill' + (t.head === maxH ? ' top' : '')
+      + '" style="width:' + (t.head / maxH * 100) + '%"></div></div>'
+      + '<div class="bar-count">' + t.head + '</div></div>';
+  }).join('');
+
+  /* Week by week, role by role. */
+  document.getElementById('mpHead').innerHTML =
+      '<tr><th>Week Ending</th>'
+    + MP_ROLES.map(function(r){ return '<th>' + r.short + '</th>'; }).join('')
+    + '<th>Total</th><th>Hours</th><th>Cost</th></tr>';
+
+  const pg = pageSlice('mp', weeks.slice().reverse().map(function(w){
+    const t = mpTotals(w);
+    return '<tr><td><b>' + fmtDate(w.week) + '</b></td>'
+      + MP_ROLES.map(function(r){
+          const c = mpNum((w.count||{})[r.id]);
+          return '<td>' + (c == null ? '<span style="color:var(--muted);">—</span>' : c) + '</td>';
+        }).join('')
+      + '<td><b>' + t.head + '</b></td>'
+      + '<td>' + (t.hours ? t.hours.toLocaleString() : '—') + '</td>'
+      + '<td>' + (t.cost ? fmtMoney(t.cost) : '—') + '</td></tr>';
+  }));
+  document.getElementById('mpTable').innerHTML = pg.rows.join('');
+  document.getElementById('mpPager').innerHTML = pagerHtml('mp', pg, 'weeks');
+  mpRenderForm();
+}
+
+/* Only the people who own the numbers may change them. */
+function mpCanEdit(){ return can('manageDirectory') || can('managePermissions'); }
+
+function mpRenderForm(){
+  const el = document.getElementById('mpForm');
+  if(!el) return;
+  if(!mpCanEdit()){
+    el.innerHTML = '<div class="notice info">Sign in as Owner or GC Admin to add or change a week.</div>';
+    return;
+  }
+  const weeks = manpowerWeeks();
+  const last = weeks.length ? weeks[weeks.length - 1] : null;
+  el.innerHTML =
+      '<div class="mp-form">'
+    + '<label class="lbl">Week ending<input type="date" id="mpWeek" class="input" value="'
+    +   (last ? last.week : todayISO()) + '"></label>'
+    + '<div class="table-wrap"><table class="data-table"><thead><tr>'
+    +   '<th>Role</th><th>How many</th><th>Hours each</th><th>Pay rate $/hr</th></tr></thead><tbody>'
+    + MP_ROLES.map(function(r){
+        return '<tr><td><b>' + r.label + '</b></td>'
+          + '<td><input type="number" min="0" step="1" class="input mp-in" id="mpC-' + r.id + '" placeholder="—"></td>'
+          + '<td><input type="number" min="0" step="0.5" class="input mp-in" id="mpH-' + r.id + '" placeholder="—"></td>'
+          + '<td><input type="number" min="0" step="0.01" class="input mp-in" id="mpR-' + r.id + '" placeholder="—"></td></tr>';
+      }).join('')
+    + '</tbody></table></div>'
+    + '<label class="lbl">Note<input type="text" id="mpNoteIn" class="input" placeholder="anything worth remembering about this week"></label>'
+    + '<div style="margin-top:12px;"><button type="button" class="btn btn-primary" onclick="mpSaveWeek()">Save this week</button>'
+    + ' <button type="button" class="btn" onclick="mpLoadWeek()">Load the week shown above</button></div>'
+    + '</div>';
+}
+
+/* Pull an existing week back into the form so it can be corrected rather
+   than retyped from scratch. */
+function mpLoadWeek(){
+  const wk = document.getElementById('mpWeek').value;
+  const w = manpowerWeeks().filter(function(x){ return x.week === wk; })[0];
+  if(!w){ toast('No week saved for ' + (wk ? fmtDate(wk) : 'that date')); return; }
+  MP_ROLES.forEach(function(r){
+    const set = function(pre, v){
+      const el = document.getElementById(pre + r.id);
+      if(el) el.value = (v == null ? '' : v);
+    };
+    set('mpC-', (w.count||{})[r.id]);
+    set('mpH-', (w.hours||{})[r.id]);
+    set('mpR-', (w.rate ||{})[r.id]);
+  });
+  const n = document.getElementById('mpNoteIn'); if(n) n.value = w.note || '';
+  toast('Loaded week ending ' + fmtDate(wk));
+}
+
+function mpSaveWeek(){
+  const wk = document.getElementById('mpWeek').value;
+  if(!wk){ toast('Pick the week ending date first'); return; }
+  const grab = function(pre){
+    const o = {};
+    MP_ROLES.forEach(function(r){
+      const el = document.getElementById(pre + r.id);
+      const raw = el ? String(el.value).trim() : '';
+      /* Empty stays empty. A blank turned into 0 would read as "AMECO had
+         nobody in that role", which is a very different claim. */
+      if(raw !== '' && isFinite(Number(raw))) o[r.id] = Number(raw);
+    });
+    return o;
+  };
+  const rec = { week: wk, count: grab('mpC-'), hours: grab('mpH-'), rate: grab('mpR-'),
+                note: (document.getElementById('mpNoteIn')||{}).value || '' };
+  if(!Object.keys(rec.count).length){ toast('Enter at least one headcount'); return; }
+
+  const before = (state.manpower || []).filter(function(x){ return x.week !== wk; });
+  const replaced = before.length !== (state.manpower || []).length;
+  state.manpower = before.concat([rec]);
+  logAudit(replaced ? 'Manpower week updated' : 'Manpower week added',
+           'Week ending ' + fmtDate(wk) + ' — ' + mpTotals(rec).head + ' people');
+  saveState();
+  renderManpower();
+  toast((replaced ? 'Updated' : 'Saved') + ' week ending ' + fmtDate(wk));
+}
+
 /* ---------------- HISTORY ----------------
    Every scaffold AMECO has ever erected on this site: 1,317 that have
    come down, plus the ones still up, per building.
@@ -6148,6 +6440,16 @@ function renderHistory(){
   /* Five bare numbers with two-word captions. Anyone who has not lived
      inside this data cannot tell Ever Built from Closed Out, or why
      Cancelled is separate. Say what each one counts, in a sentence. */
+  /* How long the closed ones actually stood. AMECO's All Scaffolds tab
+     carries no takedown date, which is why this page used to say the
+     lifespan was unknowable. It is in the file after all -- one dismantle
+     work order per scaffold, on a different tab -- so it is here now. */
+  const stood = rows.map(function(h){ return h.daysStood; })
+                    .filter(function(d){ return typeof d === 'number' && d >= 0; })
+                    .sort(function(a,b){ return a-b; });
+  const medStood = stood.length ? stood[Math.floor(stood.length/2)] : null;
+  const wentOnRent = stood.filter(function(d){ return d > STANDING_LIMIT_DAYS; }).length;
+
   const where = histBldg === 'ALL' ? 'this site' : histBldg;
   document.getElementById('histKpis').innerHTML =
       kpi('Ever Built', rows.length + standing.length,
@@ -6159,7 +6461,26 @@ function renderHistory(){
     + kpi('Cancelled', cancelled,
           'requested and then called off &mdash; never actually built, never cost anything')
     + (awaiting ? kpi('Awaiting Erection', awaiting,
-          'approved and waiting on AMECO to build &mdash; work is blocked until they do') : '');
+          'approved and waiting on AMECO to build &mdash; work is blocked until they do') : '')
+    + (medStood != null ? kpi('Typical Life', medStood + ' days',
+          'half the closed scaffolds in ' + where + ' stood longer than this, half shorter')
+        : '')
+    + (stood.length ? kpi('Went Onto Rent', wentOnRent,
+          'of ' + stood.length + ' closed scaffolds stayed past ' + STANDING_LIMIT_DAYS
+          + ' days and started charging rent &mdash; '
+          + Math.round(wentOnRent / stood.length * 100) + '% of them') : '');
+
+  /* Say what the dates are, and be specific about what is still missing. */
+  const dn = document.getElementById('histDatesNote');
+  if(dn) dn.innerHTML = stood.length
+    ? '<b>Erect and dismantle dates are both real.</b> The day each scaffold went up comes '
+      + 'from AMECO&rsquo;s All Scaffolds tab; the day it came down comes from its dismantle '
+      + 'work order. <b>' + stood.length + '</b> of the <b>' + rows.length
+      + '</b> closed records have both, so how long they actually stood is measured, not estimated. '
+      + 'Ignore the report&rsquo;s own Days Standing column &mdash; it keeps counting to today even '
+      + 'after a scaffold is gone.'
+    : '<b>About the dates.</b> Every date here is an <b>erect date</b>. No dismantle dates have '
+      + 'been loaded for this selection yet.';
 
   // Built per month -- closed and standing together, so the bar heights
   // show real site activity rather than only what happens to be down.
@@ -6216,17 +6537,29 @@ function renderHistory(){
         ? '<b>' + siteAll + '</b> closed-out records across the whole site (' + siteClosed + ' dismantled). '
         : 'Showing <b>' + rows.length + '</b> in ' + histBldg
           + '. Entire site: <b>' + siteAll + '</b> (' + siteClosed + ' dismantled). ')
-      + 'Newest erect date first. Search by tag, location, contractor or trade.';
+      + 'Newest erect date first. Search by tag, location, contractor or trade. '
+      + 'Days It Stood turns red when the scaffold outlived its '
+      + STANDING_LIMIT_DAYS + '-day rent-free window.';
   }
   const pg = pageSlice('hist', filtered.map(function(h){
+    /* Past the rent-free window means this one was being charged for by
+       the time it came down -- worth seeing at a glance in a list of
+       1,300 rows. */
+    const d = h.daysStood;
+    const paid = typeof d === 'number' && d > STANDING_LIMIT_DAYS;
     return '<tr><td><b>' + h.tag + '</b></td><td>' + h.building + '</td><td>' + (h.subArea||'—')
       + '</td><td>' + (h.loc||'—') + '</td><td>' + (h.discipline||'—') + '</td><td>' + (h.requestor||'—')
       + '</td><td>' + (h.erect ? fmtDate(h.erect) : '—') + '</td>'
+      + '<td>' + (h.dismantled ? fmtDate(h.dismantled) : '—') + '</td>'
+      + '<td' + (paid ? ' style="color:var(--red);font-weight:var(--fw-bold);"' : '') + '>'
+      +   (typeof d === 'number' ? d + ' day' + (d === 1 ? '' : 's')
+              + (paid ? ' <span class="th-sub" style="display:inline;">rented</span>' : '') : '—')
+      + '</td>'
       + '<td><span class="chip ' + (h.outcome==='Cancelled'?'chip-muted':'chip-done') + '">'
       + h.outcome + '</span></td></tr>';
   }));
   document.getElementById('histTable').innerHTML = pg.rows.join('')
-    || '<tr><td colspan="8"><div class="empty">Nothing matches that search.</div></td></tr>';
+    || '<tr><td colspan="10"><div class="empty">Nothing matches that search.</div></td></tr>';
   document.getElementById('histPager').innerHTML = pagerHtml('hist', pg, 'scaffolds');
 }
 
@@ -10662,7 +10995,7 @@ init();
      scaffolds never clobber one another. */
   var CONFIG_FIELDS = ["notifications","directory","nextNum","notifiedOverdue",
                        "rental","roles","auditLog","buildings","buildingFloors",
-                       "grid","notify","snapshots"];
+                       "grid","notify","snapshots","manpower"];
   var CLIENT = "c" + Math.random().toString(36).slice(2);
   var db, auth, isAllowed = false, isOwner = false;
   var lastSync = {}, lastCfg = "", pushTimer = null, renderQueued = false;
