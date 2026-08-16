@@ -1576,6 +1576,27 @@ details.fold > .fold-body{ padding-bottom:16px; }
 /* Manpower entry form. */
 .mp-form .lbl{ display:block; max-width:280px; margin-bottom:var(--sp-3); }
 .mp-form .mp-in{ max-width:120px; }
+
+/* Which report the dashboard is showing. Quiet, but never absent. */
+.as-of{ font-size:var(--fs-2xs); color:var(--muted); margin:var(--sp-2) 0 var(--sp-3); }
+.as-of b{ color:var(--ink); }
+
+/* Manpower entry. The note used to be a one-line box crammed against its
+   own label with the word "remember" cut off. It is a real field now:
+   full width, its own label, and a line saying what it is for. */
+.mp-form .mp-how{ margin-bottom:var(--sp-4); line-height:1.6; }
+.mp-week-row{ display:flex; align-items:flex-end; gap:var(--sp-3); flex-wrap:wrap; margin-bottom:var(--sp-4); }
+.mp-week-row .lbl{ margin:0; }
+.mp-hint{ font-size:var(--fs-2xs); color:var(--muted); }
+.mp-form .mp-in{ max-width:110px; }
+.mp-calc{ color:var(--muted); font-variant-numeric:tabular-nums; }
+.mp-note-label{ display:block; margin-top:var(--sp-5); font-weight:var(--fw-medium); }
+.mp-note-help{ font-size:var(--fs-2xs); color:var(--muted); line-height:1.55;
+  margin:var(--sp-hair) 0 var(--sp-2); max-width:62ch; }
+textarea.mp-note{ display:block; width:100%; max-width:none; min-height:76px;
+  resize:vertical; font:inherit; line-height:1.5; padding:var(--sp-2) var(--sp-3); }
+.mp-actions{ display:flex; align-items:center; gap:var(--sp-3); flex-wrap:wrap; margin-top:var(--sp-4); }
+@media (max-width:640px){ .mp-form .mp-in{ max-width:none; } }
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
@@ -1731,6 +1752,7 @@ details.fold > .fold-body{ padding-bottom:16px; }
 
   <div id="view-dashboard" class="view">
     <div class="building-tabs" id="dashBldgTabs"></div>
+    <div id="dashAsOf"></div>
     <div class="cost-exposure-banner alert-glass" id="costExposureBanner" style="display:none;"></div>
     <div class="card ask-card">
       <h2>🔎 Ask About Your Scaffolds</h2>
@@ -1813,7 +1835,7 @@ details.fold > .fold-body{ padding-bottom:16px; }
       <summary><h2>Scaffold History &mdash; Every Scaffold Ever Built</h2></summary>
       <div class="fold-body">
       <p class="fold-sub">
-        The full record from AMECO&rsquo;s All Scaffolds report: what has been put up on this
+        The full record from the builder&rsquo;s All Scaffolds report: what has been put up on this
         site since October 2024, and what has already come down. Pick a building.</p>
       <div id="histNotLoaded" class="notice warn" style="display:none;">
         <b>The history has not been loaded into the database yet &mdash; nothing is missing.</b>
@@ -1881,7 +1903,7 @@ details.fold > .fold-body{ padding-bottom:16px; }
       <summary><h2 id="wkTitle">Week Over Week</h2></summary>
       <div class="fold-body">
       <p class="fold-sub">
-        Drop in each AMECO report as it arrives and this compares any two of them &mdash;
+        Drop in each weekly report as it arrives and this compares any two of them &mdash;
         what went up, what came down, and whether the rent is rising or falling.
         The file is read here in your browser; only the summary is saved.
         Loading a report never changes the live register.</p>
@@ -1929,39 +1951,73 @@ details.fold > .fold-body{ padding-bottom:16px; }
       <summary><h2 id="mpTitle">Manpower &mdash; Who Is On Site</h2></summary>
       <div class="fold-body">
       <p class="fold-sub">
-        One row per week: how many people the scaffold builder has here by role, the hours
-        they worked and what they cost. The point is the trend &mdash; are they putting more
-        people on, or quietly taking them off while the backlog grows?</p>
+        Hours worked and what they cost, by role. Everything is stored per day, so the
+        week, month and year totals below are all the same numbers added up different ways
+        &mdash; they can never disagree with each other.</p>
+      <div class="wk-modes" id="mpModes"></div>
       <div id="mpKpis" class="kpi-grid kpi-auto"></div>
       <div id="mpNote"></div>
       </div>
     </details>
 
-    <details class="card fold" id="fold-mp-trend" open>
-      <summary><h2>Headcount Over Time</h2></summary>
+    <details class="card fold" id="fold-mp-roles" open>
+      <summary><h2>Where The Hours Went</h2></summary>
       <div class="fold-body">
-      <p class="fold-sub">Total people on site each week. Follows the roles you have entered.</p>
+      <p class="fold-sub">The period shown above, broken down by role.</p>
+      <div id="mpRoles"></div>
+      </div>
+    </details>
+
+    <details class="card fold" id="fold-mp-trend" open>
+      <summary><h2>Man-Hours Over Time</h2></summary>
+      <div class="fold-body">
+      <p class="fold-sub">Every period recorded, newest first. Follows the toggle above.</p>
       <div id="mpTrend"></div>
       </div>
     </details>
 
-    <details class="card fold" id="fold-mp-roles" open>
-      <summary><h2>By Role, Week by Week</h2></summary>
+    <details class="card fold" id="fold-mp-table">
+      <summary><h2>Every Period, Side By Side</h2></summary>
       <div class="fold-body">
-      <p class="fold-sub">Every week you have entered. Newest first. Sign in as Owner or GC Admin to add or edit.</p>
+      <p class="fold-sub">
+        Hours per scaffold is the crew&rsquo;s hours divided by the scaffolds they put up in the
+        same period. It is the number that says whether the same people are getting more or
+        less done &mdash; headcount on its own does not.</p>
       <div class="table-wrap"><table class="data-table">
         <thead id="mpHead"></thead><tbody id="mpTable"></tbody></table></div>
       <div id="mpPager"></div>
       </div>
     </details>
 
-    <details class="card fold" id="fold-mp-add">
-      <summary><h2>Add or Update a Week</h2></summary>
+    <details class="card fold" id="fold-mp-load">
+      <summary><h2>Load a Manpower Report</h2></summary>
       <div class="fold-body">
       <p class="fold-sub">
-        Enter what the builder had on site for the week. Enter the same week again to correct it &mdash;
-        it replaces rather than duplicates. Leave a field blank if you do not know it;
-        blank is recorded as unknown, not as zero.</p>
+        Drop in the builder&rsquo;s own report and this reads it. It finds the columns by their
+        headings whatever order they are in, and tells you exactly what it matched before
+        anything is saved. Loading the same days again replaces them rather than doubling up.</p>
+      <div class="wk-drop" id="mpDrop">
+        <input type="file" id="mpFile" accept=".csv,.xlsx" style="display:none"
+               onchange="if(this.files&&this.files[0]){mpUploadFile(this.files[0]);this.value='';}">
+        <button type="button" class="btn btn-primary" onclick="document.getElementById('mpFile').click()">
+          Choose a file&hellip;</button>
+        <span class="wk-hint">or drag a .csv or .xlsx here</span>
+        <button type="button" class="btn" onclick="mpDownloadTemplate()">Download a blank template</button>
+        <div class="wk-msg" id="mpMsg"></div>
+      </div>
+      <div class="notice info" style="margin-top:12px;">
+        <b>Do not have a report yet?</b> Download the blank template and send it to the builder.
+        It has the five columns this needs &mdash; <b>Date</b>, <b>Role</b>, <b>People</b>,
+        <b>Hours Each</b>, <b>Pay Rate</b> &mdash; so whatever comes back will load first time.
+        Roles must read as Project Manager, Superintendent, General Foreman, Foreman, Erector
+        or Helper; anything else is listed back to you rather than quietly dropped.
+      </div>
+      </div>
+    </details>
+
+    <details class="card fold" id="fold-mp-add">
+      <summary><h2>Or Type a Week In By Hand</h2></summary>
+      <div class="fold-body">
       <div id="mpForm"></div>
       </div>
     </details>
@@ -2284,7 +2340,7 @@ details.fold > .fold-body{ padding-bottom:16px; }
 </div>
 
 <script>
-const SEED = {"dataVersion": "2026-08-15-dismantle-dates", "generated": "2026-07-03", "rooms": {"DSM4": {"Ground Floor": ["Process Corridor (537-01041)", "Process Corridor (537-01042)", "Process Corridor (537-01043)", "Stair 1 (537-01001)", "Stair 2 (537-01002)", "Lower Production Cell Culture (537-01660)", "WIP Lab (537-01661)", "Open Area (537-01662)", "Sprinkler Riser Room (537-01260)", "Campaign Equipment Storage (537-01204)", "Mechanical (537-01205)", "Mechanical Equipment (537-01209)", "HVAC Mechanical (537-01202)", "Shaft (537-01210)", "WFI Stills (537-01208)", "Water Systems (537-01201)", "Waste Systems (537-01206)", "Janitor (537-01203)", "Telecom (537-01250)", "IDF (537-01251)", "Electrical Closet (537-01230)", "Electrical Closet (537-01231)", "Harvest (537-01680)", "JC (537-01683)", "MAL (537-01681)", "PAL (537-01682)", "Work Room (537-01684)", "Ceiling Access (537-01633)", "MAL (537-01631)", "PAL Out (537-01621)", "Column Packing (537-01630)", "Cold Room (537-01622)", "Filter Assembly Room (537-01625)", "Initial Purification (537-01620)", "Dirty VRC (537-10012)", "Clean VRC (537-10011)", "Product Hold (537-01605)", "CNC Storage (537-01200)", "Bulk Fill (537-01610)", "Clean Staging (537-01603)", "Cold Pass Through (537-01613)", "PAL (537-01611)", "MAL (537-01612)", "MAL (537-01602)", "JC (537-01604)", "Final Purification (537-01600)", "PAL In (537-01601)", "Chrom Bay 1", "Chrom Bay 2", "Chrom Bay 3", "Flex Bay (Future)", "Other / Not Listed"], "Ground Floor Interstitial": ["Walk-On Ceiling - Ground Floor (537-05960)", "Electrical Closet - Open to Below (537-01230)", "HVAC Mechanical - Open to Below (537-01202)", "Telecom - Open to Below (537-01250)", "IDF - Open to Below (537-01251)", "Walkable Ceiling Zone, Typ.", "Non-Walkable Ceiling Zone", "Other / Not Listed"], "First Floor": ["Process Corridor (537-10040)", "Process Corridor (537-10043)", "Corridor (537-10042)", "Stair 1 (537-10001)", "Stair 2 (537-10002)", "Upper Production Cell Culture (537-10660)", "JC (537-10661)", "Process Mechanical (537-10645)", "Process Mechanical (537-10651)", "Process Mechanical (537-10653)", "Mechanical/Utility (537-10201)", "Electrical Room (537-10230)", "HVAC Mechanical (537-10200)", "HVAC Mechanical (537-10204)", "Upstream CIP (537-10203)", "Upstream Post Autoclave Staging (537-10654)", "Upstream Clean Staging (537-10652)", "Upstream Dirty Staging (537-10650)", "WIP Lab (537-10644)", "Seed Cell Culture (537-10640)", "MAL/PAL (537-10632)", "Inoculum Lab (537-10630)", "JC (537-10643)", "MAL (537-10642)", "PAL (537-10641)", "CNC Storage (537-10631)", "Janitor (537-10205)", "IDF (537-10251)", "Telecom Room (537-10250)", "Central CIP (537-10202)", "Dirty VRC (537-10012)", "Clean VRC (537-10011)", "Buffer Hold (537-10620)", "Shaft (537-10210)", "Other / Not Listed"], "First Floor Interstitial": ["Electrical Room - Open to Below (537-10230)", "HVAC Mechanical - Open to Below (537-10200)", "Telecom Room - Open to Below (537-10250)", "Lift Zone", "Walkable Ceiling Zone, Typ.", "Non-Walkable Ceiling Zone", "Other / Not Listed"], "Second Floor": ["Process Corridor (537-20040)", "Process Corridor (537-20041)", "Stair 1 (537-20001)", "Stair 2 (537-20002)", "Louver Plenum (537-20202)", "Louver Plenum (537-20203)", "Electrical Substation (537-20233)", "Electrical Room (537-20231)", "Electrical Room (537-20232)", "Electrical Closet (537-20230)", "HVAC Mechanical (537-20200)", "Telecom Room (537-20250)", "IDF (537-20251)", "WIP Lab (537-20648)", "JC (537-20646)", "JC (537-20604)", "JC (537-20622)", "Media Prep (537-20640)", "Media Tech Space (537-20649)", "Media Hold/Perfusion (537-20660)", "Cold Room (537-20647)", "Cold MAL (537-20641)", "MAL Out (537-20642)", "MAL In (537-20643)", "FTS Room (537-20645)", "Process Mechanical (537-20625)", "Process Mechanical (537-20623)", "Dirty Wash Staging (537-20626)", "Clean Wash Staging (537-20624)", "Post Autoclave Staging (537-20620)", "Dirty VRC (537-10012)", "Clean VRC (537-10011)", "Buffer Prep (537-20600)", "Janitor (537-20650)", "Shaft (537-20210)", "Other / Not Listed"], "Second Floor Interstitial": ["Walk-On Ceiling - Second Floor (537-25960)", "Electrical Room - Open to Below (537-20231)", "HVAC Mechanical - Open to Below (537-20200)", "Media Tech Space - Open to Below (537-20649)", "Walkable Ceiling Zone, Typ.", "Non-Walkable Ceiling Zone", "Other / Not Listed"]}, "DSM1": {"General Area": []}, "DSM2": {"General Area": []}, "DSM3": {"General Area": []}, "Warehouse": {"General Area": []}, "HB2": {"General Area": []}, "CUB": {"General Area": []}, "CUB Expansion": {"General Area": []}, "DPFG": {"General Area": []}, "Lab/Admin Building": {"General Area": []}, "Tank Farm": {"General Area": []}, "Spine": {"General Area": []}, "Site": {"General Area": []}}, "buildingName": "Project Aura / Pixie Dust Campus \u2014 Pilot on Building 537 (DSM4)", "buildings": ["DSM4", "DSM1", "DSM2", "DSM3", "Warehouse", "HB2", "CUB", "CUB Expansion", "DPFG", "Lab/Admin Building", "Tank Farm", "Spine", "Site"], "buildingFloors": {"DSM4": ["Ground Floor", "Ground Floor Interstitial", "First Floor", "First Floor Interstitial", "Second Floor", "Second Floor Interstitial"], "DSM1": ["Ground Floor", "Level 2"], "DSM2": ["General Area"], "DSM3": ["Ground Floor", "First Floor", "Second Floor"], "Warehouse": ["General Area"], "HB2": ["Ground Level", "Roof"], "CUB": ["Ground Floor", "First Floor", "Roof"], "CUB Expansion": ["Ground Floor", "Level 1"], "DPFG": ["General Area"], "Lab/Admin Building": ["General Area"], "Tank Farm": ["General Area"], "Spine": ["Ground Floor", "Second Floor", "Roof"], "Site": ["Exterior"]}, "directory": {"gc": [], "gcPersonnel": [], "builders": [], "builderPersonnel": [], "contractors": [], "safety": []}, "disciplines": ["Piping", "Structural", "Steel", "Electrical", "Instrumentation", "HVAC", "Mechanical", "Insulation", "Paint", "Safety", "Siting", "Consultant", "Other"], "durations": ["1 week", "2 weeks", "1 month", "2 months"], "floors": ["Ground Floor", "Ground Floor Interstitial", "First Floor", "First Floor Interstitial", "Second Floor", "Second Floor Interstitial"], "records": [], "notifications": [], "history": [], "awaitingErection": [], "grid": {"DSM4": {"First Floor": {"cols": [{"label": "13", "x": 11.785}, {"label": "12", "x": 17.667}, {"label": "11", "x": 23.917}, {"label": "10", "x": 27.962}, {"label": "9", "x": 31.638}, {"label": "8", "x": 35.315}, {"label": "7.4", "x": 37.398}, {"label": "7", "x": 38.991}, {"label": "6", "x": 43.035}, {"label": "5", "x": 47.815}, {"label": "4", "x": 51.859}, {"label": "3", "x": 56.27}, {"label": "2", "x": 62.52}, {"label": "1", "x": 68.403}], "rows": [{"label": "F", "y": 21.812}, {"label": "E", "y": 28.63}, {"label": "D", "y": 37.721}, {"label": "C", "y": 48.516}, {"label": "B", "y": 58.744}, {"label": "A", "y": 70.36}], "source": "auto-detected from the floor plan image"}, "First Floor Interstitial": {"cols": [{"label": "13", "x": 11.785}, {"label": "12", "x": 17.667}, {"label": "11", "x": 23.917}, {"label": "10", "x": 27.962}, {"label": "9", "x": 31.638}, {"label": "8", "x": 35.315}, {"label": "7", "x": 38.991}, {"label": "6", "x": 43.035}, {"label": "5", "x": 47.815}, {"label": "4", "x": 51.859}, {"label": "3", "x": 56.27}, {"label": "2", "x": 62.52}, {"label": "1", "x": 68.403}], "rows": [{"label": "F", "y": 21.812}, {"label": "E", "y": 28.63}, {"label": "D", "y": 37.721}, {"label": "C", "y": 48.516}, {"label": "B", "y": 58.744}, {"label": "A", "y": 70.36}], "source": "auto-detected from the floor plan image"}, "Ground Floor": {"cols": [{"label": "13", "x": 13.787}, {"label": "12", "x": 19.669}, {"label": "11", "x": 25.919}, {"label": "10", "x": 29.963}, {"label": "9", "x": 33.64}, {"label": "8", "x": 37.316}, {"label": "7.4", "x": 39.4}, {"label": "7", "x": 40.993}, {"label": "6", "x": 45.037}, {"label": "5", "x": 49.816}, {"label": "4", "x": 53.86}, {"label": "3", "x": 58.272}, {"label": "2", "x": 64.522}, {"label": "1", "x": 70.404}], "rows": [{"label": "F", "y": 26.641}, {"label": "E", "y": 33.491}, {"label": "D", "y": 42.551}, {"label": "C", "y": 53.314}, {"label": "B", "y": 63.542}, {"label": "A", "y": 75.221}], "source": "auto-detected from the floor plan image"}, "Ground Floor Interstitial": {"cols": [{"label": "13", "x": 11.785}, {"label": "12", "x": 17.667}, {"label": "11", "x": 23.917}, {"label": "10", "x": 27.962}, {"label": "9", "x": 31.638}, {"label": "8", "x": 35.315}, {"label": "7", "x": 38.991}, {"label": "6", "x": 43.035}, {"label": "5", "x": 47.815}, {"label": "4", "x": 51.859}, {"label": "3", "x": 56.27}, {"label": "2", "x": 62.52}, {"label": "1", "x": 68.403}], "rows": [{"label": "F", "y": 21.812}, {"label": "E", "y": 28.63}, {"label": "D", "y": 37.721}, {"label": "C", "y": 48.516}, {"label": "B", "y": 58.744}, {"label": "A", "y": 70.36}], "source": "auto-detected from the floor plan image"}, "Second Floor": {"cols": [{"label": "13", "x": 11.785}, {"label": "12", "x": 17.667}, {"label": "11", "x": 23.917}, {"label": "10", "x": 27.962}, {"label": "9", "x": 31.638}, {"label": "8", "x": 35.315}, {"label": "7.4", "x": 37.398}, {"label": "7", "x": 38.991}, {"label": "6", "x": 43.035}, {"label": "5", "x": 47.815}, {"label": "4", "x": 51.859}, {"label": "3", "x": 56.27}, {"label": "2", "x": 62.52}, {"label": "1", "x": 68.403}], "rows": [{"label": "F", "y": 21.749}, {"label": "E", "y": 28.567}, {"label": "D", "y": 37.658}, {"label": "C", "y": 48.453}, {"label": "B", "y": 58.681}, {"label": "A", "y": 70.297}], "source": "auto-detected from the floor plan image"}, "Second Floor Interstitial": {"cols": [{"label": "13", "x": 11.785}, {"label": "12", "x": 17.667}, {"label": "11", "x": 23.917}, {"label": "10", "x": 27.962}, {"label": "9", "x": 31.638}, {"label": "8", "x": 35.315}, {"label": "7", "x": 38.991}, {"label": "6", "x": 43.035}, {"label": "5", "x": 47.794}, {"label": "4", "x": 51.838}, {"label": "3", "x": 56.25}, {"label": "2", "x": 62.48}, {"label": "1", "x": 68.362}], "rows": [{"label": "F", "y": 24.653}, {"label": "E", "y": 31.471}, {"label": "D", "y": 40.562}, {"label": "C", "y": 51.326}, {"label": "B", "y": 61.553}, {"label": "A", "y": 73.201}], "source": "auto-detected from the floor plan image"}}, "DSM3": {"Ground Floor": {"cols": [{"label": "13", "x": 13.79}, {"label": "12", "x": 19.672}, {"label": "11", "x": 25.917}, {"label": "10", "x": 29.961}, {"label": "9", "x": 33.64}, {"label": "8", "x": 37.312}, {"label": "7.4", "x": 39.412}, {"label": "7", "x": 40.988}, {"label": "6", "x": 45.032}, {"label": "5", "x": 49.807}, {"label": "4", "x": 53.851}, {"label": "3", "x": 58.263}, {"label": "2", "x": 64.508}, {"label": "1", "x": 70.391}], "rows": [{"label": "F", "y": 26.47}, {"label": "E", "y": 33.278}, {"label": "D", "y": 42.369}, {"label": "C", "y": 53.157}, {"label": "B", "y": 63.386}, {"label": "A", "y": 75.03}], "source": "read from the grid bubbles on DMS3 Ground Floor.pdf"}, "First Floor": {"cols": [{"label": "13", "x": 11.785}, {"label": "12", "x": 17.662}, {"label": "11", "x": 23.912}, {"label": "10", "x": 27.952}, {"label": "9", "x": 31.631}, {"label": "8", "x": 35.307}, {"label": "7.4", "x": 37.403}, {"label": "7", "x": 38.979}, {"label": "6", "x": 43.023}, {"label": "5", "x": 47.802}, {"label": "4", "x": 51.841}, {"label": "3", "x": 56.253}, {"label": "2", "x": 62.503}, {"label": "1", "x": 68.381}], "rows": [{"label": "F", "y": 21.869}, {"label": "E", "y": 28.685}, {"label": "D", "y": 37.776}, {"label": "C", "y": 48.564}, {"label": "B", "y": 58.792}, {"label": "A", "y": 70.436}], "source": "read from the grid bubbles on DMS3 First Floor.pdf"}, "Second Floor": {"cols": [{"label": "13", "x": 11.78}, {"label": "12", "x": 17.662}, {"label": "11", "x": 23.912}, {"label": "10", "x": 27.951}, {"label": "9", "x": 31.631}, {"label": "8", "x": 35.307}, {"label": "7.4", "x": 37.403}, {"label": "7", "x": 38.979}, {"label": "6", "x": 43.023}, {"label": "5", "x": 47.802}, {"label": "4", "x": 51.841}, {"label": "3", "x": 56.253}, {"label": "2", "x": 62.503}, {"label": "1", "x": 68.381}], "rows": [{"label": "F", "y": 21.561}, {"label": "E", "y": 28.377}, {"label": "D", "y": 37.468}, {"label": "C", "y": 48.255}, {"label": "B", "y": 58.484}, {"label": "A", "y": 70.128}], "source": "read from the grid bubbles on DMS3 Second Floor.pdf"}}}, "roomCoords": {"DSM4": {"Ground Floor": {"Process Corridor (537-01041)": {"x": 35.5, "y": 51.2}, "Process Corridor (537-01042)": {"x": 42.9, "y": 36.3}, "Process Corridor (537-01043)": {"x": 25.7, "y": 48.3}, "Stair 1 (537-01001)": {"x": 28.8, "y": 76.9}, "Stair 2 (537-01002)": {"x": 46.1, "y": 21.3}, "Lower Production Cell Culture (537-01660)": {"x": 31.7, "y": 39.6}, "WIP Lab (537-01661)": {"x": 21.9, "y": 27.7}, "Open Area (537-01662)": {"x": 27.0, "y": 29.7}, "Sprinkler Riser Room (537-01260)": {"x": 34.5, "y": 28.4}, "Campaign Equipment Storage (537-01204)": {"x": 40.3, "y": 29.1}, "Mechanical (537-01205)": {"x": 34.9, "y": 30.8}, "Mechanical Equipment (537-01209)": {"x": 48.1, "y": 27.6}, "HVAC Mechanical (537-01202)": {"x": 48.0, "y": 33.5}, "Shaft (537-01210)": {"x": 44.3, "y": 23.9}, "WFI Stills (537-01208)": {"x": 57.2, "y": 28.1}, "Water Systems (537-01201)": {"x": 63.1, "y": 44.7}, "Waste Systems (537-01206)": {"x": 38.1, "y": 46.4}, "Janitor (537-01203)": {"x": 45.2, "y": 39.6}, "Telecom (537-01250)": {"x": 47.4, "y": 43.1}, "IDF (537-01251)": {"x": 47.4, "y": 46.6}, "Electrical Closet (537-01230)": {"x": 56.2, "y": 54.6}, "Electrical Closet (537-01231)": {"x": 27.0, "y": 43.1}, "Harvest (537-01680)": {"x": 16.1, "y": 40.2}, "JC (537-01683)": {"x": 18.1, "y": 44.7}, "MAL (537-01681)": {"x": 21.6, "y": 45.1}, "PAL (537-01682)": {"x": 18.4, "y": 48.0}, "Work Room (537-01684)": {"x": 15.2, "y": 50.6}, "Ceiling Access (537-01633)": {"x": 11.4, "y": 55.2}, "MAL (537-01631)": {"x": 20.6, "y": 55.1}, "PAL Out (537-01621)": {"x": 23.4, "y": 55.1}, "Column Packing (537-01630)": {"x": 17.2, "y": 61.3}, "Cold Room (537-01622)": {"x": 20.9, "y": 65.8}, "Filter Assembly Room (537-01625)": {"x": 39.1, "y": 55.7}, "Initial Purification (537-01620)": {"x": 38.9, "y": 70.9}, "Dirty VRC (537-10012)": {"x": 52.2, "y": 50.8}, "Clean VRC (537-10011)": {"x": 60.1, "y": 51.0}, "Product Hold (537-01605)": {"x": 60.3, "y": 54.8}, "CNC Storage (537-01200)": {"x": 65.8, "y": 55.0}, "Bulk Fill (537-01610)": {"x": 65.5, "y": 60.4}, "Clean Staging (537-01603)": {"x": 56.4, "y": 61.3}, "Cold Pass Through (537-01613)": {"x": 69.4, "y": 62.6}, "PAL (537-01611)": {"x": 63.5, "y": 66.2}, "MAL (537-01612)": {"x": 66.1, "y": 66.2}, "MAL (537-01602)": {"x": 66.1, "y": 70.0}, "JC (537-01604)": {"x": 54.7, "y": 73.7}, "Final Purification (537-01600)": {"x": 60.6, "y": 72.1}, "PAL In (537-01601)": {"x": 66.0, "y": 73.5}}, "Ground Floor Interstitial": {"Walk-On Ceiling - Ground Floor (537-05960)": {"x": 34.4, "y": 73.5}, "Electrical Closet - Open to Below (537-01230)": {"x": 54.1, "y": 50.0}, "HVAC Mechanical - Open to Below (537-01202)": {"x": 45.0, "y": 30.3}, "Telecom - Open to Below (537-01250)": {"x": 43.0, "y": 38.2}, "IDF - Open to Below (537-01251)": {"x": 43.0, "y": 41.6}}, "First Floor": {"Process Corridor (537-10040)": {"x": 37.1, "y": 46.2}, "Process Corridor (537-10043)": {"x": 20.6, "y": 42.0}, "Corridor (537-10042)": {"x": 21.2, "y": 60.9}, "Stair 1 (537-10001)": {"x": 26.6, "y": 72.0}, "Stair 2 (537-10002)": {"x": 40.1, "y": 15.9}, "Upper Production Cell Culture (537-10660)": {"x": 29.9, "y": 23.9}, "JC (537-10661)": {"x": 21.4, "y": 22.8}, "Process Mechanical (537-10645)": {"x": 54.2, "y": 25.1}, "Process Mechanical (537-10651)": {"x": 37.7, "y": 39.3}, "Process Mechanical (537-10653)": {"x": 29.5, "y": 46.5}, "Mechanical/Utility (537-10201)": {"x": 60.0, "y": 24.0}, "Electrical Room (537-10230)": {"x": 18.8, "y": 39.0}, "HVAC Mechanical (537-10200)": {"x": 59.9, "y": 64.8}, "HVAC Mechanical (537-10204)": {"x": 16.2, "y": 45.5}, "Upstream CIP (537-10203)": {"x": 26.0, "y": 43.0}, "Upstream Post Autoclave Staging (537-10654)": {"x": 26.0, "y": 39.2}, "Upstream Clean Staging (537-10652)": {"x": 34.1, "y": 40.9}, "Upstream Dirty Staging (537-10650)": {"x": 40.5, "y": 40.6}, "WIP Lab (537-10644)": {"x": 43.0, "y": 40.1}, "Seed Cell Culture (537-10640)": {"x": 47.0, "y": 33.1}, "MAL/PAL (537-10632)": {"x": 46.6, "y": 39.1}, "Inoculum Lab (537-10630)": {"x": 51.8, "y": 41.5}, "JC (537-10643)": {"x": 44.7, "y": 36.2}, "MAL (537-10642)": {"x": 45.2, "y": 42.3}, "PAL (537-10641)": {"x": 45.1, "y": 45.7}, "CNC Storage (537-10631)": {"x": 50.6, "y": 46.1}, "Janitor (537-10205)": {"x": 57.3, "y": 46.0}, "IDF (537-10251)": {"x": 51.3, "y": 50.1}, "Telecom Room (537-10250)": {"x": 55.5, "y": 51.7}, "Central CIP (537-10202)": {"x": 66.3, "y": 50.2}, "Dirty VRC (537-10012)": {"x": 51.9, "y": 56.9}, "Clean VRC (537-10011)": {"x": 56.7, "y": 57.3}, "Buffer Hold (537-10620)": {"x": 33.4, "y": 60.7}, "Shaft (537-10210)": {"x": 45.3, "y": 16.0}}, "First Floor Interstitial": {"Electrical Room - Open to Below (537-10230)": {"x": 18.7, "y": 39.4}, "HVAC Mechanical - Open to Below (537-10200)": {"x": 59.3, "y": 63.5}, "Telecom Room - Open to Below (537-10250)": {"x": 53.1, "y": 49.8}}, "Second Floor": {"Process Corridor (537-20040)": {"x": 67.8, "y": 41.5}, "Process Corridor (537-20041)": {"x": 53.9, "y": 23.0}, "Stair 1 (537-20001)": {"x": 26.9, "y": 72.1}, "Stair 2 (537-20002)": {"x": 41.6, "y": 16.7}, "Louver Plenum (537-20202)": {"x": 13.3, "y": 73.4}, "Louver Plenum (537-20203)": {"x": 13.9, "y": 18.8}, "Electrical Substation (537-20233)": {"x": 29.9, "y": 27.6}, "Electrical Room (537-20231)": {"x": 41.2, "y": 32.2}, "Electrical Room (537-20232)": {"x": 33.6, "y": 22.6}, "Electrical Closet (537-20230)": {"x": 40.8, "y": 42.0}, "HVAC Mechanical (537-20200)": {"x": 20.6, "y": 41.9}, "Telecom Room (537-20250)": {"x": 41.3, "y": 45.8}, "IDF (537-20251)": {"x": 46.5, "y": 46.1}, "WIP Lab (537-20648)": {"x": 51.2, "y": 39.0}, "JC (537-20646)": {"x": 52.8, "y": 41.0}, "JC (537-20604)": {"x": 36.6, "y": 68.1}, "JC (537-20622)": {"x": 67.3, "y": 49.1}, "Media Prep (537-20640)": {"x": 60.1, "y": 40.8}, "Media Tech Space (537-20649)": {"x": 54.7, "y": 26.0}, "Media Hold/Perfusion (537-20660)": {"x": 48.3, "y": 31.5}, "Cold Room (537-20647)": {"x": 63.9, "y": 25.4}, "Cold MAL (537-20641)": {"x": 64.2, "y": 29.5}, "MAL Out (537-20642)": {"x": 64.5, "y": 33.9}, "MAL In (537-20643)": {"x": 63.8, "y": 38.5}, "FTS Room (537-20645)": {"x": 53.4, "y": 29.6}, "Process Mechanical (537-20625)": {"x": 53.0, "y": 46.3}, "Process Mechanical (537-20623)": {"x": 60.0, "y": 54.1}, "Dirty Wash Staging (537-20626)": {"x": 52.7, "y": 51.3}, "Clean Wash Staging (537-20624)": {"x": 58.9, "y": 50.8}, "Post Autoclave Staging (537-20620)": {"x": 64.1, "y": 51.0}, "Dirty VRC (537-10012)": {"x": 50.4, "y": 56.0}, "Clean VRC (537-10011)": {"x": 50.4, "y": 57.6}, "Buffer Prep (537-20600)": {"x": 50.6, "y": 66.9}, "Janitor (537-20650)": {"x": 50.4, "y": 26.3}, "Shaft (537-20210)": {"x": 45.3, "y": 17.1}}, "Second Floor Interstitial": {"Walk-On Ceiling - Second Floor (537-25960)": {"x": 54.1, "y": 76.6}, "Electrical Room - Open to Below (537-20231)": {"x": 38.4, "y": 28.6}, "HVAC Mechanical - Open to Below (537-20200)": {"x": 33.3, "y": 43.6}, "Media Tech Space - Open to Below (537-20649)": {"x": 55.0, "y": 27.7}}}}};
+const SEED = {"dataVersion": "2026-08-15-dismantle-dates", "registerAsOf": "2026-08-10", "generated": "2026-07-03", "rooms": {"DSM4": {"Ground Floor": ["Process Corridor (537-01041)", "Process Corridor (537-01042)", "Process Corridor (537-01043)", "Stair 1 (537-01001)", "Stair 2 (537-01002)", "Lower Production Cell Culture (537-01660)", "WIP Lab (537-01661)", "Open Area (537-01662)", "Sprinkler Riser Room (537-01260)", "Campaign Equipment Storage (537-01204)", "Mechanical (537-01205)", "Mechanical Equipment (537-01209)", "HVAC Mechanical (537-01202)", "Shaft (537-01210)", "WFI Stills (537-01208)", "Water Systems (537-01201)", "Waste Systems (537-01206)", "Janitor (537-01203)", "Telecom (537-01250)", "IDF (537-01251)", "Electrical Closet (537-01230)", "Electrical Closet (537-01231)", "Harvest (537-01680)", "JC (537-01683)", "MAL (537-01681)", "PAL (537-01682)", "Work Room (537-01684)", "Ceiling Access (537-01633)", "MAL (537-01631)", "PAL Out (537-01621)", "Column Packing (537-01630)", "Cold Room (537-01622)", "Filter Assembly Room (537-01625)", "Initial Purification (537-01620)", "Dirty VRC (537-10012)", "Clean VRC (537-10011)", "Product Hold (537-01605)", "CNC Storage (537-01200)", "Bulk Fill (537-01610)", "Clean Staging (537-01603)", "Cold Pass Through (537-01613)", "PAL (537-01611)", "MAL (537-01612)", "MAL (537-01602)", "JC (537-01604)", "Final Purification (537-01600)", "PAL In (537-01601)", "Chrom Bay 1", "Chrom Bay 2", "Chrom Bay 3", "Flex Bay (Future)", "Other / Not Listed"], "Ground Floor Interstitial": ["Walk-On Ceiling - Ground Floor (537-05960)", "Electrical Closet - Open to Below (537-01230)", "HVAC Mechanical - Open to Below (537-01202)", "Telecom - Open to Below (537-01250)", "IDF - Open to Below (537-01251)", "Walkable Ceiling Zone, Typ.", "Non-Walkable Ceiling Zone", "Other / Not Listed"], "First Floor": ["Process Corridor (537-10040)", "Process Corridor (537-10043)", "Corridor (537-10042)", "Stair 1 (537-10001)", "Stair 2 (537-10002)", "Upper Production Cell Culture (537-10660)", "JC (537-10661)", "Process Mechanical (537-10645)", "Process Mechanical (537-10651)", "Process Mechanical (537-10653)", "Mechanical/Utility (537-10201)", "Electrical Room (537-10230)", "HVAC Mechanical (537-10200)", "HVAC Mechanical (537-10204)", "Upstream CIP (537-10203)", "Upstream Post Autoclave Staging (537-10654)", "Upstream Clean Staging (537-10652)", "Upstream Dirty Staging (537-10650)", "WIP Lab (537-10644)", "Seed Cell Culture (537-10640)", "MAL/PAL (537-10632)", "Inoculum Lab (537-10630)", "JC (537-10643)", "MAL (537-10642)", "PAL (537-10641)", "CNC Storage (537-10631)", "Janitor (537-10205)", "IDF (537-10251)", "Telecom Room (537-10250)", "Central CIP (537-10202)", "Dirty VRC (537-10012)", "Clean VRC (537-10011)", "Buffer Hold (537-10620)", "Shaft (537-10210)", "Other / Not Listed"], "First Floor Interstitial": ["Electrical Room - Open to Below (537-10230)", "HVAC Mechanical - Open to Below (537-10200)", "Telecom Room - Open to Below (537-10250)", "Lift Zone", "Walkable Ceiling Zone, Typ.", "Non-Walkable Ceiling Zone", "Other / Not Listed"], "Second Floor": ["Process Corridor (537-20040)", "Process Corridor (537-20041)", "Stair 1 (537-20001)", "Stair 2 (537-20002)", "Louver Plenum (537-20202)", "Louver Plenum (537-20203)", "Electrical Substation (537-20233)", "Electrical Room (537-20231)", "Electrical Room (537-20232)", "Electrical Closet (537-20230)", "HVAC Mechanical (537-20200)", "Telecom Room (537-20250)", "IDF (537-20251)", "WIP Lab (537-20648)", "JC (537-20646)", "JC (537-20604)", "JC (537-20622)", "Media Prep (537-20640)", "Media Tech Space (537-20649)", "Media Hold/Perfusion (537-20660)", "Cold Room (537-20647)", "Cold MAL (537-20641)", "MAL Out (537-20642)", "MAL In (537-20643)", "FTS Room (537-20645)", "Process Mechanical (537-20625)", "Process Mechanical (537-20623)", "Dirty Wash Staging (537-20626)", "Clean Wash Staging (537-20624)", "Post Autoclave Staging (537-20620)", "Dirty VRC (537-10012)", "Clean VRC (537-10011)", "Buffer Prep (537-20600)", "Janitor (537-20650)", "Shaft (537-20210)", "Other / Not Listed"], "Second Floor Interstitial": ["Walk-On Ceiling - Second Floor (537-25960)", "Electrical Room - Open to Below (537-20231)", "HVAC Mechanical - Open to Below (537-20200)", "Media Tech Space - Open to Below (537-20649)", "Walkable Ceiling Zone, Typ.", "Non-Walkable Ceiling Zone", "Other / Not Listed"]}, "DSM1": {"General Area": []}, "DSM2": {"General Area": []}, "DSM3": {"General Area": []}, "Warehouse": {"General Area": []}, "HB2": {"General Area": []}, "CUB": {"General Area": []}, "CUB Expansion": {"General Area": []}, "DPFG": {"General Area": []}, "Lab/Admin Building": {"General Area": []}, "Tank Farm": {"General Area": []}, "Spine": {"General Area": []}, "Site": {"General Area": []}}, "buildingName": "Project Aura / Pixie Dust Campus \u2014 Pilot on Building 537 (DSM4)", "buildings": ["DSM4", "DSM1", "DSM2", "DSM3", "Warehouse", "HB2", "CUB", "CUB Expansion", "DPFG", "Lab/Admin Building", "Tank Farm", "Spine", "Site"], "buildingFloors": {"DSM4": ["Ground Floor", "Ground Floor Interstitial", "First Floor", "First Floor Interstitial", "Second Floor", "Second Floor Interstitial"], "DSM1": ["Ground Floor", "Level 2"], "DSM2": ["General Area"], "DSM3": ["Ground Floor", "First Floor", "Second Floor"], "Warehouse": ["General Area"], "HB2": ["Ground Level", "Roof"], "CUB": ["Ground Floor", "First Floor", "Roof"], "CUB Expansion": ["Ground Floor", "Level 1"], "DPFG": ["General Area"], "Lab/Admin Building": ["General Area"], "Tank Farm": ["General Area"], "Spine": ["Ground Floor", "Second Floor", "Roof"], "Site": ["Exterior"]}, "directory": {"gc": [], "gcPersonnel": [], "builders": [], "builderPersonnel": [], "contractors": [], "safety": []}, "disciplines": ["Piping", "Structural", "Steel", "Electrical", "Instrumentation", "HVAC", "Mechanical", "Insulation", "Paint", "Safety", "Siting", "Consultant", "Other"], "durations": ["1 week", "2 weeks", "1 month", "2 months"], "floors": ["Ground Floor", "Ground Floor Interstitial", "First Floor", "First Floor Interstitial", "Second Floor", "Second Floor Interstitial"], "records": [], "notifications": [], "history": [], "awaitingErection": [], "grid": {"DSM4": {"First Floor": {"cols": [{"label": "13", "x": 11.785}, {"label": "12", "x": 17.667}, {"label": "11", "x": 23.917}, {"label": "10", "x": 27.962}, {"label": "9", "x": 31.638}, {"label": "8", "x": 35.315}, {"label": "7.4", "x": 37.398}, {"label": "7", "x": 38.991}, {"label": "6", "x": 43.035}, {"label": "5", "x": 47.815}, {"label": "4", "x": 51.859}, {"label": "3", "x": 56.27}, {"label": "2", "x": 62.52}, {"label": "1", "x": 68.403}], "rows": [{"label": "F", "y": 21.812}, {"label": "E", "y": 28.63}, {"label": "D", "y": 37.721}, {"label": "C", "y": 48.516}, {"label": "B", "y": 58.744}, {"label": "A", "y": 70.36}], "source": "auto-detected from the floor plan image"}, "First Floor Interstitial": {"cols": [{"label": "13", "x": 11.785}, {"label": "12", "x": 17.667}, {"label": "11", "x": 23.917}, {"label": "10", "x": 27.962}, {"label": "9", "x": 31.638}, {"label": "8", "x": 35.315}, {"label": "7", "x": 38.991}, {"label": "6", "x": 43.035}, {"label": "5", "x": 47.815}, {"label": "4", "x": 51.859}, {"label": "3", "x": 56.27}, {"label": "2", "x": 62.52}, {"label": "1", "x": 68.403}], "rows": [{"label": "F", "y": 21.812}, {"label": "E", "y": 28.63}, {"label": "D", "y": 37.721}, {"label": "C", "y": 48.516}, {"label": "B", "y": 58.744}, {"label": "A", "y": 70.36}], "source": "auto-detected from the floor plan image"}, "Ground Floor": {"cols": [{"label": "13", "x": 13.787}, {"label": "12", "x": 19.669}, {"label": "11", "x": 25.919}, {"label": "10", "x": 29.963}, {"label": "9", "x": 33.64}, {"label": "8", "x": 37.316}, {"label": "7.4", "x": 39.4}, {"label": "7", "x": 40.993}, {"label": "6", "x": 45.037}, {"label": "5", "x": 49.816}, {"label": "4", "x": 53.86}, {"label": "3", "x": 58.272}, {"label": "2", "x": 64.522}, {"label": "1", "x": 70.404}], "rows": [{"label": "F", "y": 26.641}, {"label": "E", "y": 33.491}, {"label": "D", "y": 42.551}, {"label": "C", "y": 53.314}, {"label": "B", "y": 63.542}, {"label": "A", "y": 75.221}], "source": "auto-detected from the floor plan image"}, "Ground Floor Interstitial": {"cols": [{"label": "13", "x": 11.785}, {"label": "12", "x": 17.667}, {"label": "11", "x": 23.917}, {"label": "10", "x": 27.962}, {"label": "9", "x": 31.638}, {"label": "8", "x": 35.315}, {"label": "7", "x": 38.991}, {"label": "6", "x": 43.035}, {"label": "5", "x": 47.815}, {"label": "4", "x": 51.859}, {"label": "3", "x": 56.27}, {"label": "2", "x": 62.52}, {"label": "1", "x": 68.403}], "rows": [{"label": "F", "y": 21.812}, {"label": "E", "y": 28.63}, {"label": "D", "y": 37.721}, {"label": "C", "y": 48.516}, {"label": "B", "y": 58.744}, {"label": "A", "y": 70.36}], "source": "auto-detected from the floor plan image"}, "Second Floor": {"cols": [{"label": "13", "x": 11.785}, {"label": "12", "x": 17.667}, {"label": "11", "x": 23.917}, {"label": "10", "x": 27.962}, {"label": "9", "x": 31.638}, {"label": "8", "x": 35.315}, {"label": "7.4", "x": 37.398}, {"label": "7", "x": 38.991}, {"label": "6", "x": 43.035}, {"label": "5", "x": 47.815}, {"label": "4", "x": 51.859}, {"label": "3", "x": 56.27}, {"label": "2", "x": 62.52}, {"label": "1", "x": 68.403}], "rows": [{"label": "F", "y": 21.749}, {"label": "E", "y": 28.567}, {"label": "D", "y": 37.658}, {"label": "C", "y": 48.453}, {"label": "B", "y": 58.681}, {"label": "A", "y": 70.297}], "source": "auto-detected from the floor plan image"}, "Second Floor Interstitial": {"cols": [{"label": "13", "x": 11.785}, {"label": "12", "x": 17.667}, {"label": "11", "x": 23.917}, {"label": "10", "x": 27.962}, {"label": "9", "x": 31.638}, {"label": "8", "x": 35.315}, {"label": "7", "x": 38.991}, {"label": "6", "x": 43.035}, {"label": "5", "x": 47.794}, {"label": "4", "x": 51.838}, {"label": "3", "x": 56.25}, {"label": "2", "x": 62.48}, {"label": "1", "x": 68.362}], "rows": [{"label": "F", "y": 24.653}, {"label": "E", "y": 31.471}, {"label": "D", "y": 40.562}, {"label": "C", "y": 51.326}, {"label": "B", "y": 61.553}, {"label": "A", "y": 73.201}], "source": "auto-detected from the floor plan image"}}, "DSM3": {"Ground Floor": {"cols": [{"label": "13", "x": 13.79}, {"label": "12", "x": 19.672}, {"label": "11", "x": 25.917}, {"label": "10", "x": 29.961}, {"label": "9", "x": 33.64}, {"label": "8", "x": 37.312}, {"label": "7.4", "x": 39.412}, {"label": "7", "x": 40.988}, {"label": "6", "x": 45.032}, {"label": "5", "x": 49.807}, {"label": "4", "x": 53.851}, {"label": "3", "x": 58.263}, {"label": "2", "x": 64.508}, {"label": "1", "x": 70.391}], "rows": [{"label": "F", "y": 26.47}, {"label": "E", "y": 33.278}, {"label": "D", "y": 42.369}, {"label": "C", "y": 53.157}, {"label": "B", "y": 63.386}, {"label": "A", "y": 75.03}], "source": "read from the grid bubbles on DMS3 Ground Floor.pdf"}, "First Floor": {"cols": [{"label": "13", "x": 11.785}, {"label": "12", "x": 17.662}, {"label": "11", "x": 23.912}, {"label": "10", "x": 27.952}, {"label": "9", "x": 31.631}, {"label": "8", "x": 35.307}, {"label": "7.4", "x": 37.403}, {"label": "7", "x": 38.979}, {"label": "6", "x": 43.023}, {"label": "5", "x": 47.802}, {"label": "4", "x": 51.841}, {"label": "3", "x": 56.253}, {"label": "2", "x": 62.503}, {"label": "1", "x": 68.381}], "rows": [{"label": "F", "y": 21.869}, {"label": "E", "y": 28.685}, {"label": "D", "y": 37.776}, {"label": "C", "y": 48.564}, {"label": "B", "y": 58.792}, {"label": "A", "y": 70.436}], "source": "read from the grid bubbles on DMS3 First Floor.pdf"}, "Second Floor": {"cols": [{"label": "13", "x": 11.78}, {"label": "12", "x": 17.662}, {"label": "11", "x": 23.912}, {"label": "10", "x": 27.951}, {"label": "9", "x": 31.631}, {"label": "8", "x": 35.307}, {"label": "7.4", "x": 37.403}, {"label": "7", "x": 38.979}, {"label": "6", "x": 43.023}, {"label": "5", "x": 47.802}, {"label": "4", "x": 51.841}, {"label": "3", "x": 56.253}, {"label": "2", "x": 62.503}, {"label": "1", "x": 68.381}], "rows": [{"label": "F", "y": 21.561}, {"label": "E", "y": 28.377}, {"label": "D", "y": 37.468}, {"label": "C", "y": 48.255}, {"label": "B", "y": 58.484}, {"label": "A", "y": 70.128}], "source": "read from the grid bubbles on DMS3 Second Floor.pdf"}}}, "roomCoords": {"DSM4": {"Ground Floor": {"Process Corridor (537-01041)": {"x": 35.5, "y": 51.2}, "Process Corridor (537-01042)": {"x": 42.9, "y": 36.3}, "Process Corridor (537-01043)": {"x": 25.7, "y": 48.3}, "Stair 1 (537-01001)": {"x": 28.8, "y": 76.9}, "Stair 2 (537-01002)": {"x": 46.1, "y": 21.3}, "Lower Production Cell Culture (537-01660)": {"x": 31.7, "y": 39.6}, "WIP Lab (537-01661)": {"x": 21.9, "y": 27.7}, "Open Area (537-01662)": {"x": 27.0, "y": 29.7}, "Sprinkler Riser Room (537-01260)": {"x": 34.5, "y": 28.4}, "Campaign Equipment Storage (537-01204)": {"x": 40.3, "y": 29.1}, "Mechanical (537-01205)": {"x": 34.9, "y": 30.8}, "Mechanical Equipment (537-01209)": {"x": 48.1, "y": 27.6}, "HVAC Mechanical (537-01202)": {"x": 48.0, "y": 33.5}, "Shaft (537-01210)": {"x": 44.3, "y": 23.9}, "WFI Stills (537-01208)": {"x": 57.2, "y": 28.1}, "Water Systems (537-01201)": {"x": 63.1, "y": 44.7}, "Waste Systems (537-01206)": {"x": 38.1, "y": 46.4}, "Janitor (537-01203)": {"x": 45.2, "y": 39.6}, "Telecom (537-01250)": {"x": 47.4, "y": 43.1}, "IDF (537-01251)": {"x": 47.4, "y": 46.6}, "Electrical Closet (537-01230)": {"x": 56.2, "y": 54.6}, "Electrical Closet (537-01231)": {"x": 27.0, "y": 43.1}, "Harvest (537-01680)": {"x": 16.1, "y": 40.2}, "JC (537-01683)": {"x": 18.1, "y": 44.7}, "MAL (537-01681)": {"x": 21.6, "y": 45.1}, "PAL (537-01682)": {"x": 18.4, "y": 48.0}, "Work Room (537-01684)": {"x": 15.2, "y": 50.6}, "Ceiling Access (537-01633)": {"x": 11.4, "y": 55.2}, "MAL (537-01631)": {"x": 20.6, "y": 55.1}, "PAL Out (537-01621)": {"x": 23.4, "y": 55.1}, "Column Packing (537-01630)": {"x": 17.2, "y": 61.3}, "Cold Room (537-01622)": {"x": 20.9, "y": 65.8}, "Filter Assembly Room (537-01625)": {"x": 39.1, "y": 55.7}, "Initial Purification (537-01620)": {"x": 38.9, "y": 70.9}, "Dirty VRC (537-10012)": {"x": 52.2, "y": 50.8}, "Clean VRC (537-10011)": {"x": 60.1, "y": 51.0}, "Product Hold (537-01605)": {"x": 60.3, "y": 54.8}, "CNC Storage (537-01200)": {"x": 65.8, "y": 55.0}, "Bulk Fill (537-01610)": {"x": 65.5, "y": 60.4}, "Clean Staging (537-01603)": {"x": 56.4, "y": 61.3}, "Cold Pass Through (537-01613)": {"x": 69.4, "y": 62.6}, "PAL (537-01611)": {"x": 63.5, "y": 66.2}, "MAL (537-01612)": {"x": 66.1, "y": 66.2}, "MAL (537-01602)": {"x": 66.1, "y": 70.0}, "JC (537-01604)": {"x": 54.7, "y": 73.7}, "Final Purification (537-01600)": {"x": 60.6, "y": 72.1}, "PAL In (537-01601)": {"x": 66.0, "y": 73.5}}, "Ground Floor Interstitial": {"Walk-On Ceiling - Ground Floor (537-05960)": {"x": 34.4, "y": 73.5}, "Electrical Closet - Open to Below (537-01230)": {"x": 54.1, "y": 50.0}, "HVAC Mechanical - Open to Below (537-01202)": {"x": 45.0, "y": 30.3}, "Telecom - Open to Below (537-01250)": {"x": 43.0, "y": 38.2}, "IDF - Open to Below (537-01251)": {"x": 43.0, "y": 41.6}}, "First Floor": {"Process Corridor (537-10040)": {"x": 37.1, "y": 46.2}, "Process Corridor (537-10043)": {"x": 20.6, "y": 42.0}, "Corridor (537-10042)": {"x": 21.2, "y": 60.9}, "Stair 1 (537-10001)": {"x": 26.6, "y": 72.0}, "Stair 2 (537-10002)": {"x": 40.1, "y": 15.9}, "Upper Production Cell Culture (537-10660)": {"x": 29.9, "y": 23.9}, "JC (537-10661)": {"x": 21.4, "y": 22.8}, "Process Mechanical (537-10645)": {"x": 54.2, "y": 25.1}, "Process Mechanical (537-10651)": {"x": 37.7, "y": 39.3}, "Process Mechanical (537-10653)": {"x": 29.5, "y": 46.5}, "Mechanical/Utility (537-10201)": {"x": 60.0, "y": 24.0}, "Electrical Room (537-10230)": {"x": 18.8, "y": 39.0}, "HVAC Mechanical (537-10200)": {"x": 59.9, "y": 64.8}, "HVAC Mechanical (537-10204)": {"x": 16.2, "y": 45.5}, "Upstream CIP (537-10203)": {"x": 26.0, "y": 43.0}, "Upstream Post Autoclave Staging (537-10654)": {"x": 26.0, "y": 39.2}, "Upstream Clean Staging (537-10652)": {"x": 34.1, "y": 40.9}, "Upstream Dirty Staging (537-10650)": {"x": 40.5, "y": 40.6}, "WIP Lab (537-10644)": {"x": 43.0, "y": 40.1}, "Seed Cell Culture (537-10640)": {"x": 47.0, "y": 33.1}, "MAL/PAL (537-10632)": {"x": 46.6, "y": 39.1}, "Inoculum Lab (537-10630)": {"x": 51.8, "y": 41.5}, "JC (537-10643)": {"x": 44.7, "y": 36.2}, "MAL (537-10642)": {"x": 45.2, "y": 42.3}, "PAL (537-10641)": {"x": 45.1, "y": 45.7}, "CNC Storage (537-10631)": {"x": 50.6, "y": 46.1}, "Janitor (537-10205)": {"x": 57.3, "y": 46.0}, "IDF (537-10251)": {"x": 51.3, "y": 50.1}, "Telecom Room (537-10250)": {"x": 55.5, "y": 51.7}, "Central CIP (537-10202)": {"x": 66.3, "y": 50.2}, "Dirty VRC (537-10012)": {"x": 51.9, "y": 56.9}, "Clean VRC (537-10011)": {"x": 56.7, "y": 57.3}, "Buffer Hold (537-10620)": {"x": 33.4, "y": 60.7}, "Shaft (537-10210)": {"x": 45.3, "y": 16.0}}, "First Floor Interstitial": {"Electrical Room - Open to Below (537-10230)": {"x": 18.7, "y": 39.4}, "HVAC Mechanical - Open to Below (537-10200)": {"x": 59.3, "y": 63.5}, "Telecom Room - Open to Below (537-10250)": {"x": 53.1, "y": 49.8}}, "Second Floor": {"Process Corridor (537-20040)": {"x": 67.8, "y": 41.5}, "Process Corridor (537-20041)": {"x": 53.9, "y": 23.0}, "Stair 1 (537-20001)": {"x": 26.9, "y": 72.1}, "Stair 2 (537-20002)": {"x": 41.6, "y": 16.7}, "Louver Plenum (537-20202)": {"x": 13.3, "y": 73.4}, "Louver Plenum (537-20203)": {"x": 13.9, "y": 18.8}, "Electrical Substation (537-20233)": {"x": 29.9, "y": 27.6}, "Electrical Room (537-20231)": {"x": 41.2, "y": 32.2}, "Electrical Room (537-20232)": {"x": 33.6, "y": 22.6}, "Electrical Closet (537-20230)": {"x": 40.8, "y": 42.0}, "HVAC Mechanical (537-20200)": {"x": 20.6, "y": 41.9}, "Telecom Room (537-20250)": {"x": 41.3, "y": 45.8}, "IDF (537-20251)": {"x": 46.5, "y": 46.1}, "WIP Lab (537-20648)": {"x": 51.2, "y": 39.0}, "JC (537-20646)": {"x": 52.8, "y": 41.0}, "JC (537-20604)": {"x": 36.6, "y": 68.1}, "JC (537-20622)": {"x": 67.3, "y": 49.1}, "Media Prep (537-20640)": {"x": 60.1, "y": 40.8}, "Media Tech Space (537-20649)": {"x": 54.7, "y": 26.0}, "Media Hold/Perfusion (537-20660)": {"x": 48.3, "y": 31.5}, "Cold Room (537-20647)": {"x": 63.9, "y": 25.4}, "Cold MAL (537-20641)": {"x": 64.2, "y": 29.5}, "MAL Out (537-20642)": {"x": 64.5, "y": 33.9}, "MAL In (537-20643)": {"x": 63.8, "y": 38.5}, "FTS Room (537-20645)": {"x": 53.4, "y": 29.6}, "Process Mechanical (537-20625)": {"x": 53.0, "y": 46.3}, "Process Mechanical (537-20623)": {"x": 60.0, "y": 54.1}, "Dirty Wash Staging (537-20626)": {"x": 52.7, "y": 51.3}, "Clean Wash Staging (537-20624)": {"x": 58.9, "y": 50.8}, "Post Autoclave Staging (537-20620)": {"x": 64.1, "y": 51.0}, "Dirty VRC (537-10012)": {"x": 50.4, "y": 56.0}, "Clean VRC (537-10011)": {"x": 50.4, "y": 57.6}, "Buffer Prep (537-20600)": {"x": 50.6, "y": 66.9}, "Janitor (537-20650)": {"x": 50.4, "y": 26.3}, "Shaft (537-20210)": {"x": 45.3, "y": 17.1}}, "Second Floor Interstitial": {"Walk-On Ceiling - Second Floor (537-25960)": {"x": 54.1, "y": 76.6}, "Electrical Room - Open to Below (537-20231)": {"x": 38.4, "y": 28.6}, "HVAC Mechanical - Open to Below (537-20200)": {"x": 33.3, "y": 43.6}, "Media Tech Space - Open to Below (537-20649)": {"x": 55.0, "y": 27.7}}}}};
 const IMAGES = {};
 </script>
 
@@ -2362,12 +2418,14 @@ const STANDING_LIMIT_DAYS = 60;
    missing, so nobody budgets off a number that only covers part of the
    bill. When AMECO supplies erect and dismantle rates, they slot in here
    and this note gets shorter. */
-const RENT_ONLY_NOTE =
-    '<div class="rent-only"><b>These figures are rental only.</b> '
-  + 'Erecting a scaffold and tearing it down are billed separately by AMECO, '
+function rentOnlyNote(){
+  return '<div class="rent-only"><b>These figures are rental only.</b> '
+  + 'Erecting a scaffold and tearing it down are billed separately by '
+  + (typeof builderName === 'function' ? builderName() : 'the builder') + ', '
   + 'and those charges are not in this report &mdash; so they are not in any '
   + 'number on this page. A scaffold inside its rent-free window still cost '
   + 'money to put up; it just is not accruing rent yet.</div>';
+}
 function isOverStandingLimit(rec){
   const d = daysStanding(rec);
   return d != null && d >= STANDING_LIMIT_DAYS && isStanding(rec);
@@ -3482,6 +3540,7 @@ function loadState(){
        Kept in state (not SEED) because it grows every week. */
     snapshots: JSON.parse(JSON.stringify(SEED.snapshots || [])),
     manpower:  JSON.parse(JSON.stringify(SEED.manpower  || [])),
+    registerAsOf: SEED.registerAsOf || null,
     notifications: JSON.parse(JSON.stringify(SEED.notifications)),
     directory: JSON.parse(JSON.stringify(SEED.directory)),
     nextNum: 2003,
@@ -5109,6 +5168,7 @@ function init(){
   showTab(state.currentTab || (visibleTabs()[0] || {id:'request'}).id);
   checkDeepLink();
   wireFolds();
+  mpWireDrop();
   wireWeeklyDrop();
 }
 // Deep link support: #scaffold=REQ-1003 in the URL opens that scaffold's
@@ -5760,6 +5820,136 @@ function wkDateFromFilename(name){
   return null;
 }
 
+
+/* ============ WHAT THE DASHBOARD IS SHOWING, AND WHY =============
+
+   The dashboard reflects exactly one AMECO report: the newest one loaded.
+   state.registerAsOf records which. Everything else on the History tab is
+   there for comparison and touches nothing.
+
+   The rule BDiaz asked for is simple to say and easy to get wrong:
+   the LATEST report drives the dashboard. That means comparing against
+   the date the register actually reflects -- not, as the first version
+   did, against whatever other snapshots happen to be loaded. With no
+   other snapshots, a July file counted as "newest" and rolled the whole
+   site back two weeks: 53 standing scaffolds marked dismantled, 61
+   invented, 140 floor-plan pins at risk. Loading August afterwards
+   re-added the missing ones and never un-dismantled the 53.
+
+   So: newer than registerAsOf -> apply, and say what moved.
+       same or older      -> store for comparison, change nothing, say so.
+
+   He may well drop four months of back-files in at once. Every one of
+   them is older than today's position, and not one may disturb it. */
+
+/* The builder's name lives in the directory, not in a string here. This
+   app is meant to work on the next job with a different scaffold company,
+   and a name welded into the chrome is how that stops being true.
+
+   Kept OUTSIDE the manpower block on purpose: it lived inside it once,
+   got wiped when that block was rewritten, and four other places lost
+   their builder name with it. */
+function builderName(){
+  const d = (state.directory || {});
+  const pm = (d.builderPersonnel || []).filter(function(x){ return x && x.company; })[0];
+  if(pm && pm.company) return pm.company;
+  const co = (d.builders || []).filter(function(c){ return c && c.name; })[0];
+  if(co && co.name) return co.name;
+  const seen = {};
+  (state.records || []).forEach(function(r){
+    const b = r.builder || (r.assigned && r.assigned.company);
+    if(b) seen[b] = (seen[b] || 0) + 1;
+  });
+  const top = Object.keys(seen).sort(function(a,b){ return seen[b]-seen[a]; })[0];
+  return top || 'the scaffold builder';
+}
+
+function registerAsOf(){
+  return state.registerAsOf || (SEED && SEED.registerAsOf) || null;
+}
+
+/* Bring the live register in line with a newer report.
+
+   Deliberately conservative about the things that are expensive to get
+   wrong:
+     - a pin is never touched. 140 of them were placed by hand.
+     - a scaffold that reappears in a later report has its dismantle date
+       CLEARED. The first version never did this, which is why reviving
+       the register took a hand-written migration.
+     - a scaffold missing from the newer report is marked down as of the
+       report date, not today.
+     - anything created here is flagged so it is obvious it came from a
+       report rather than from someone filling in the wizard. */
+function applyReportToRegister(snap){
+  const inReport = snap.tags || {};
+  let added = 0, closed = 0, revived = 0, updated = 0, pinsKept = 0;
+
+  state.records.forEach(function(r){
+    if(!r.tag) return;
+    const t = inReport[r.tag];
+    if(r.pin) pinsKept++;
+    if(t){
+      /* Standing in this report. If we had it down, it is back up. */
+      if(r.dateDismantled){
+        delete r.dateDismantled;
+        r.status = 'Built';
+        r.lifecycleStatus = 'Built';
+        r.history = (r.history || []).concat([{
+          date: snap.date, event: 'Back on the standing report',
+          actor: 'AMECO report ' + snap.date,
+          note: 'Present again in the ' + snap.date + ' report, so the earlier takedown was wrong or it was rebuilt.'
+        }]);
+        revived++;
+      }
+      if(t.r && r.dailyRentalRate !== t.r){ r.dailyRentalRate = t.r; updated++; }
+      if(t.s && !r.subArea)   r.subArea   = t.s;
+      if(t.e && !r.dateBuilt) r.dateBuilt = t.e;
+    } else if(!r.dateDismantled){
+      /* Gone from the report: it came down on or before the report date. */
+      r.dateDismantled = snap.date;
+      r.status = 'Dismantled';
+      r.lifecycleStatus = 'Dismantled';
+      r.history = (r.history || []).concat([{
+        date: snap.date, event: 'Off the standing report',
+        actor: 'AMECO report ' + snap.date,
+        note: 'Not in the ' + snap.date + ' report, so it came down on or before that date.'
+      }]);
+      closed++;
+    }
+  });
+
+  /* New tags in the report that we have never seen. */
+  const known = {};
+  state.records.forEach(function(r){ if(r.tag) known[r.tag] = 1; });
+  Object.keys(inReport).forEach(function(tag){
+    if(known[tag]) return;
+    const t = inReport[tag];
+    state.records.push({
+      id: 'rep-' + tag,
+      tag: tag,
+      building: t.b || 'Not stated',
+      floor: (state.buildingFloors[t.b] || ['General Area'])[0],
+      subArea: t.s || '',
+      room: t.l || '',
+      trade: t.d || '',
+      requestor: { name: t.q || 'Not stated', personName: '', phone: '', email: '' },
+      dateBuilt: t.e || null,
+      dailyRentalRate: t.r || 0,
+      status: 'Built',
+      lifecycleStatus: 'Built',
+      pin: null,                       /* unplaced: nobody has told us where */
+      fromReport: snap.date,
+      history: [{ date: snap.date, event: 'Appeared on the standing report',
+                  actor: 'AMECO report ' + snap.date,
+                  note: 'New tag in the ' + snap.date + ' report. Drop a pin on the floor plan to place it.' }]
+    });
+    added++;
+  });
+
+  state.registerAsOf = snap.date;
+  return { added: added, closed: closed, revived: revived, updated: updated, pinsKept: pinsKept };
+}
+
 let _wkPending = null;   // parsed snapshot awaiting nothing -- kept for the message
 
 /* Read a dropped weekly report and fold it in. Everything happens in the
@@ -5792,27 +5982,42 @@ async function weeklyUploadFile(file){
     const replaced = before.length !== (state.snapshots || []).length;
     state.snapshots = before.concat([snap]);
 
-    /* A WEEKLY REPORT NEVER TOUCHES THE LIVE REGISTER.
-       It used to. The rule was "the newest snapshot wins", and the first
-       file BDiaz loaded was the OLDER one -- with no other snapshot to
-       compare against it counted as newest, rewrote the register back to
-       27 July, marked 53 standing scaffolds dismantled and invented 61
-       that had already come down. Loading August afterwards re-added the
-       missing ones but never un-dismantled the 53.
+    /* THE RULE: the newest report drives the dashboard.
 
-       Reports are history. They are for looking at, in any order, without
-       the dashboard moving under you. Changing what is standing today is
-       a deliberate act, not a side effect of opening a file. */
+       Compared against the date the register actually reflects, NOT
+       against the other snapshots loaded. That distinction is the whole
+       bug from last time: with no other snapshots, an old July file
+       counted as newest and rolled the site back two weeks.
+
+       Dropping in four months of back-files must leave today alone. */
+    const wasAsOf = registerAsOf();
+    const isNewer = !wasAsOf || asOf > wasAsOf;
+    let applied = null;
+    if(isNewer) applied = applyReportToRegister(snap);
+
     saveState();
     renderAll();
     if(typeof renderHistory === 'function') { try { renderHistory(); } catch(e){} }
 
     const all2 = snapshotsSorted();
-    let note = (replaced ? 'Replaced' : 'Added') + ' the ' + fmtDate(asOf) + ' report — '
-             + snap.standing + ' standing, ' + fmtMoney(snap.burn) + '/day. '
-             + all2.length + ' report' + (all2.length === 1 ? '' : 's') + ' loaded'
-             + (all2.length > 1 ? ', ' + fmtDate(all2[0].date) + ' to ' + fmtDate(all2[all2.length-1].date) : '')
-             + '. Nothing on the dashboard or floor plan changed.';
+    const loaded = all2.length + ' report' + (all2.length === 1 ? '' : 's') + ' loaded'
+                 + (all2.length > 1 ? ', ' + fmtDate(all2[0].date) + ' to '
+                                    + fmtDate(all2[all2.length-1].date) : '') + '.';
+    let note;
+    if(applied){
+      note = 'Dashboard updated to ' + fmtDate(asOf) + '. '
+           + snap.standing + ' standing, ' + fmtMoney(snap.burn) + '/day. '
+           + (applied.added   ? applied.added + ' new since ' + fmtDate(wasAsOf) + '. ' : '')
+           + (applied.closed  ? applied.closed + ' came down. ' : '')
+           + (applied.revived ? applied.revived + ' back up. ' : '')
+           + 'All ' + applied.pinsKept + ' floor-plan pins kept. ' + loaded;
+      audit('Dashboard moved to a newer report', fmtDate(asOf), 'as of',
+            wasAsOf ? fmtDate(wasAsOf) : '(none)', fmtDate(asOf));
+    } else {
+      note = 'Saved the ' + fmtDate(asOf) + ' report for comparison. '
+           + 'The dashboard still shows ' + fmtDate(wasAsOf)
+           + ', which is newer — nothing on it moved. ' + loaded;
+    }
     say(note, 'ok');
   } catch(e){
     say(e && e.message ? e.message : 'That file could not be read.', 'err');
@@ -5820,22 +6025,28 @@ async function weeklyUploadFile(file){
 }
 
 
+
 /* ================= MANPOWER =================================
-   How many people AMECO actually has on this site, week by week.
+   Who the builder has on site, what they worked, and what it cost.
 
-   BDiaz asked for this to answer a question the scaffold data alone
-   cannot: is the builder staffing up or quietly cutting back? A backlog
-   that grows while the crew shrinks is the thing you want to catch in
-   week two, not month three.
+   STORED PER DAY, PER ROLE. A day is the atom every other number is
+   built from -- week, month and year are all rollups of the same rows.
+   That is how timesheets actually arrive, and it means a week total can
+   never disagree with the days inside it, because there is only one set
+   of numbers.
 
-   Entered by hand for now. AMECO has not been asked for a roster or
-   timesheet file yet, and inventing an import format before seeing a
-   real file is how you end up with a parser nobody can feed. When a file
-   turns up, it fills this same structure -- weekEnding plus a count,
-   hours and rate per role -- and the rest of the page does not change.
+   Man-hours = people x hours. Cost = man-hours x rate. Nothing is
+   inferred: a blank stays blank and is left out of every total rather
+   than counted as zero. A week where nobody knew the erector count must
+   not read as "they pulled the whole crew" -- that is a false alarm
+   about another company's staffing, said out loud in a meeting.
 
-   A blank field is UNKNOWN, not zero. Recording an unknown as zero would
-   quietly drag every average down and make a full crew look like a cut. */
+   The number worth watching is not headcount. It is MAN-HOURS PER
+   SCAFFOLD: the crew's hours divided by the scaffolds they put up in the
+   same period. This app already knows what was erected and when, so the
+   productivity figure comes out of data that is already here rather than
+   out of a promise. Rising man-hours per scaffold means the same crew is
+   getting less done. */
 
 const MP_ROLES = [
   {id:'pm',       label:'Project Manager',  short:'PM'},
@@ -5845,143 +6056,237 @@ const MP_ROLES = [
   {id:'erector',  label:'Erector',          short:'Erectors'},
   {id:'helper',   label:'Helper',           short:'Helpers'}
 ];
+const MP_ROLE_BY_ID = {};
+MP_ROLES.forEach(function(r){ MP_ROLE_BY_ID[r.id] = r; });
 
-/* The builder's name lives in the directory, not in a string here. This
-   app is meant to work on the next job with a different scaffold company,
-   and a name welded into the chrome is how that stops being true. */
-function builderName(){
-  const d = (state.directory || {});
-  const pm = (d.builderPersonnel || []).filter(function(x){ return x && x.company; })[0];
-  if(pm && pm.company) return pm.company;
-  const co = (d.contractors || []).filter(function(c){ return c && c.isBuilder; })[0];
-  if(co && co.name) return co.name;
-  const seen = {};
+function mpRows(){ return state.manpower || []; }
+function mpNum(v){
+  if(v === '' || v === null || v === undefined) return null;
+  const n = Number(v);
+  return isFinite(n) ? n : null;
+}
+
+/* ---- period keys. A week is labelled by the Sunday that ends it, so a
+   week never straddles two labels. ---- */
+function mpWeekKey(iso){
+  const d = new Date(iso + 'T00:00:00');
+  d.setDate(d.getDate() + (6 - d.getDay()));      /* forward to Saturday-end */
+  return d.toISOString().slice(0,10);
+}
+function mpMonthKey(iso){ return String(iso).slice(0,7); }
+function mpYearKey(iso){  return String(iso).slice(0,4); }
+function mpKeyOf(iso, grain){
+  return grain === 'year' ? mpYearKey(iso)
+       : grain === 'month' ? mpMonthKey(iso)
+       : grain === 'week' ? mpWeekKey(iso) : iso;
+}
+function mpLabelOf(key, grain){
+  const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  if(grain === 'year')  return key;
+  if(grain === 'month'){ const p = key.split('-'); return MON[+p[1]-1] + ' ' + p[0]; }
+  if(grain === 'week')  return 'week ending ' + fmtDate(key);
+  return fmtDate(key);
+}
+
+/* ---- roll the daily rows up to whatever grain is being looked at ---- */
+function mpRollup(grain, rows){
+  const src = rows || mpRows();
+  const out = {};
+  src.forEach(function(r){
+    if(!r || !r.d) return;
+    const k = mpKeyOf(r.d, grain);
+    const b = out[k] || (out[k] = { key:k, grain:grain, manHours:0, cost:0,
+                                    days:{}, roles:{}, headPeak:0, unknownHours:0, unknownRate:0 });
+    const n = mpNum(r.n), h = mpNum(r.h), p = mpNum(r.p);
+    if(n == null) return;
+    b.days[r.d] = 1;
+    const role = b.roles[r.r] || (b.roles[r.r] = { manHours:0, cost:0, headPeak:0, dayCount:0 });
+    role.headPeak = Math.max(role.headPeak, n);
+    role.dayCount++;
+    if(h == null){ b.unknownHours++; return; }
+    const mh = n * h;
+    b.manHours += mh; role.manHours += mh;
+    if(p == null){ b.unknownRate++; return; }
+    b.cost += mh * p; role.cost += mh * p;
+  });
+  /* Peak headcount on any single day in the period -- the honest way to
+     say "how many people" over a span, since adding daily counts across
+     a week would report the same person five times. */
+  Object.keys(out).forEach(function(k){
+    const b = out[k];
+    const perDay = {};
+    src.forEach(function(r){
+      if(!r || !r.d || mpKeyOf(r.d, grain) !== k) return;
+      const n = mpNum(r.n); if(n == null) return;
+      perDay[r.d] = (perDay[r.d] || 0) + n;
+    });
+    b.headPeak = Math.max(0, ...Object.values(perDay).map(Number), 0);
+    b.dayCount = Object.keys(b.days).length;
+    b.cost = Math.round(b.cost * 100) / 100;
+    b.manHours = Math.round(b.manHours * 100) / 100;
+  });
+  return Object.keys(out).sort().map(function(k){ return out[k]; });
+}
+
+/* ---- the productivity number: hours spent per scaffold put up ---- */
+function mpScaffoldsErectedIn(key, grain){
+  let n = 0;
   (state.records || []).forEach(function(r){
-    const b = r.builder || (r.assigned && r.assigned.company);
-    if(b) seen[b] = (seen[b] || 0) + 1;
+    if(r.dateBuilt && mpKeyOf(r.dateBuilt, grain) === key) n++;
   });
-  const top = Object.keys(seen).sort(function(a,b){ return seen[b]-seen[a]; })[0];
-  return top || 'the scaffold builder';
+  ((typeof historyAll === 'function' ? historyAll() : []) || []).forEach(function(h){
+    if(h.erect && mpKeyOf(h.erect, grain) === key) n++;
+  });
+  return n;
+}
+function mpPerScaffold(bucket){
+  if(!bucket || !bucket.manHours) return null;
+  const built = mpScaffoldsErectedIn(bucket.key, bucket.grain);
+  if(!built) return null;
+  return { built: built, hoursEach: Math.round(bucket.manHours / built * 10) / 10 };
 }
 
-function manpowerWeeks(){
-  return (state.manpower || []).slice()
-    .sort(function(a,b){ return String(a.week).localeCompare(String(b.week)); });
-}
-function mpNum(v){ return (typeof v === 'number' && isFinite(v)) ? v : null; }
-
-/* Head, hours and cost for one week. Unknowns stay out of the totals and
-   are counted separately so the page can say how complete the week is. */
-function mpTotals(w){
-  if(!w) return null;
-  let head = 0, hours = 0, cost = 0, known = 0, blank = 0;
-  MP_ROLES.forEach(function(r){
-    const c = mpNum((w.count || {})[r.id]);
-    const h = mpNum((w.hours || {})[r.id]);
-    const p = mpNum((w.rate  || {})[r.id]);
-    if(c == null){ blank++; return; }
-    known++; head += c;
-    if(h != null){ hours += c * h; if(p != null) cost += c * h * p; }
-  });
-  return { head: head, hours: hours, cost: cost, known: known, blank: blank };
+/* Which grain the page is showing, remembered between visits. */
+let mpGrain = (function(){
+  try { const v = localStorage.getItem('sc_mpGrain');
+        return ['week','month','year'].indexOf(v) >= 0 ? v : 'week'; }
+  catch(e){ return 'week'; }
+})();
+function setMpGrain(g){
+  if(['week','month','year'].indexOf(g) < 0) return;
+  mpGrain = g;
+  try { localStorage.setItem('sc_mpGrain', g); } catch(e){}
+  renderManpower();
 }
 
 function renderManpower(){
-  const weeks = manpowerWeeks();
-  const ttl = document.getElementById('mpTitle');
-  if(ttl) ttl.textContent = 'Manpower — Who ' + builderName() + ' Has On Site';
+  const buckets = mpRollup(mpGrain);
+  const cur  = buckets.length ? buckets[buckets.length - 1] : null;
+  const prev = buckets.length > 1 ? buckets[buckets.length - 2] : null;
+  const unit = mpGrain;
+
+  /* Offer year only once the job actually spans two of them; a dead
+     toggle is worse than no toggle. */
+  const spans = {
+    week:  mpRollup('week').length,
+    month: mpRollup('month').length,
+    year:  mpRollup('year').length
+  };
+  const modes = document.getElementById('mpModes');
+  if(modes){
+    modes.innerHTML = ['week','month','year'].map(function(g){
+      const dead = (g === 'month' && spans.month < 1) || (g === 'year' && spans.year < 2);
+      return '<button type="button" class="' + (mpGrain === g ? 'on' : '') + '"'
+        + (dead ? ' disabled title="Not enough of the job recorded yet to compare by ' + g + '"' : '')
+        + ' onclick="setMpGrain(&quot;' + g + '&quot;)">By ' + g + '</button>';
+    }).join('')
+    + '<span class="wk-hint" style="margin-left:10px;">'
+      + mpRows().length + ' day-rows recorded &middot; '
+      + spans.week + ' week' + (spans.week===1?'':'s') + ', '
+      + spans.month + ' month' + (spans.month===1?'':'s') + '</span>';
+    if(mpGrain === 'year' && spans.year < 2){ mpGrain = 'month'; renderManpower(); return; }
+  }
+
   const kpis = document.getElementById('mpKpis');
   const note = document.getElementById('mpNote');
-  const cur  = weeks.length ? weeks[weeks.length - 1] : null;
-  const prev = weeks.length > 1 ? weeks[weeks.length - 2] : null;
-  const T = mpTotals(cur), P = mpTotals(prev);
-
-  if(!weeks.length){
+  if(!cur){
     kpis.innerHTML = '';
     note.innerHTML = '<div class="notice info" style="margin-top:12px;">'
-      + '<b>No weeks entered yet.</b> Open <b>Add or Update a Week</b> below and put in what '
-      + builderName() + ' has on site this week. One week on its own is already useful; from the second '
-      + 'week onward this page starts showing the direction.</div>';
-    document.getElementById('mpTrend').innerHTML = '';
-    document.getElementById('mpHead').innerHTML = '';
-    document.getElementById('mpTable').innerHTML = '';
-    document.getElementById('mpPager').innerHTML = '';
+      + '<b>Nothing recorded yet.</b> Either upload ' + builderName()
+      + '&rsquo;s manpower report below, or type a week in by hand. '
+      + 'One week on its own already tells you the run rate; from the second onward '
+      + 'this page shows the direction.</div>';
+    ['mpTrend','mpHead','mpTable','mpPager','mpRoles'].forEach(function(id){
+      const el = document.getElementById(id); if(el) el.innerHTML = '';
+    });
     mpRenderForm();
     return;
   }
 
-  const delta = function(label, val, prevVal, fmt, goodWhenUp, sub){
-    let body = fmt(val);
+  const delta = function(label, val, was, fmt, goodWhenUp, sub){
     let colour = '', arrow = '';
-    if(prevVal != null && val != null && prevVal !== val){
-      const up = val > prevVal;
-      const good = goodWhenUp ? up : !up;
+    if(was != null && val != null && was !== val){
+      const good = goodWhenUp ? val > was : val < was;
       colour = ' style="color:' + (good ? 'var(--green)' : 'var(--red)') + ';"';
-      arrow = (up ? '+' : '−') + fmt(Math.abs(val - prevVal)).replace(/^[+−]/, '');
+      arrow = (val > was ? '+' : '−') + fmt(Math.abs(val - was));
     }
     return '<div class="kpi"><div class="label">' + label + '</div>'
-      + '<div class="value"' + colour + '>' + body + '</div>'
-      + '<div class="kpi-note">' + (arrow ? '<b>' + arrow + '</b> vs last week &middot; ' : '') + sub + '</div></div>';
+      + '<div class="value"' + colour + '>' + fmt(val) + '</div>'
+      + '<div class="kpi-note">' + (arrow ? '<b>' + arrow + '</b> vs the ' + unit + ' before &middot; ' : '')
+      + sub + '</div></div>';
   };
-
-  /* Ties the crew back to the work. A rising backlog against a shrinking
-     crew is the whole reason to track this. */
-  const standing = state.records.filter(function(r){ return r.tag && !r.dateDismantled; }).length;
-  const hands = (mpNum((cur.count||{}).erector) || 0) + (mpNum((cur.count||{}).helper) || 0);
-  const perHand = hands ? (standing / hands) : null;
+  const hrs = function(v){ return v ? Math.round(v).toLocaleString() : '0'; };
+  const per = mpPerScaffold(cur), perPrev = mpPerScaffold(prev);
 
   kpis.innerHTML =
-      delta('People On Site', T.head, P ? P.head : null, function(v){ return String(v); }, true,
-            'across ' + T.known + ' of ' + MP_ROLES.length + ' roles, week ending ' + fmtDate(cur.week))
-    + delta('Hours This Week', T.hours, P ? P.hours : null,
-            function(v){ return v ? v.toLocaleString() : '—'; }, true,
-            T.hours ? 'headcount x hours each' : 'no hours entered for this week')
-    + delta('Labour Cost', T.cost, P ? P.cost : null,
+      delta('Man-Hours', cur.manHours, prev ? prev.manHours : null, hrs, true,
+            'people x hours worked, ' + mpLabelOf(cur.key, mpGrain)
+            + (cur.dayCount ? ' &middot; across ' + cur.dayCount + ' day' + (cur.dayCount===1?'':'s') : ''))
+    + delta('Labour Cost', cur.cost, prev ? prev.cost : null,
             function(v){ return v ? fmtMoney(v) : '—'; }, false,
-            T.cost ? 'hours x pay rate, this week' : 'enter pay rates to see this')
-    + '<div class="kpi"><div class="label">Scaffolds Per Hand</div>'
-      + '<div class="value">' + (perHand != null ? perHand.toFixed(1) : '—') + '</div>'
-      + '<div class="kpi-note">' + (perHand != null
-          ? standing + ' standing across ' + hands + ' erectors and helpers &mdash; '
-            + 'rises when the crew shrinks or the backlog grows'
-          : 'enter erectors and helpers to see this') + '</div></div>';
+            cur.cost ? 'man-hours x pay rate' : 'add pay rates to see this')
+    + delta('Most On Site In One Day', cur.headPeak, prev ? prev.headPeak : null,
+            function(v){ return String(v); }, true,
+            'the busiest single day &mdash; adding days together would count the same person twice')
+    + '<div class="kpi"><div class="label">Hours Per Scaffold</div>'
+      + '<div class="value"' + (per && perPrev && per.hoursEach > perPrev.hoursEach
+            ? ' style="color:var(--red);"' : (per && perPrev && per.hoursEach < perPrev.hoursEach
+            ? ' style="color:var(--green);"' : '')) + '>'
+      + (per ? per.hoursEach : '—') + '</div>'
+      + '<div class="kpi-note">' + (per
+          ? hrs(cur.manHours) + ' hours across ' + per.built + ' scaffolds put up. '
+            + 'Rising means the same crew is getting less done.'
+          : 'needs hours and at least one scaffold erected in this ' + unit) + '</div></div>';
 
-  note.innerHTML = T.blank
-    ? '<div class="notice warn" style="margin-top:12px;"><b>' + T.blank + ' of '
-      + MP_ROLES.length + ' roles are blank for week ending ' + fmtDate(cur.week)
-      + '.</b> Blank means not known, so those roles are left out of every total above '
-      + 'rather than counted as zero. Fill them in and these numbers get sharper.</div>'
+  const gaps = [];
+  if(cur.unknownHours) gaps.push(cur.unknownHours + ' row' + (cur.unknownHours===1?'':'s') + ' with no hours');
+  if(cur.unknownRate)  gaps.push(cur.unknownRate + ' row' + (cur.unknownRate===1?'':'s') + ' with no pay rate');
+  note.innerHTML = gaps.length
+    ? '<div class="notice warn" style="margin-top:12px;"><b>' + mpLabelOf(cur.key, mpGrain)
+      + ' is missing some detail:</b> ' + gaps.join(' and ')
+      + '. Those are left out of the totals above rather than counted as zero, '
+      + 'so the real figures are higher than what is shown.</div>'
     : '';
 
-  /* Headcount over time. */
-  const maxH = Math.max(1, ...weeks.map(function(w){ return mpTotals(w).head; }));
-  document.getElementById('mpTrend').innerHTML = weeks.slice().reverse().map(function(w){
-    const t = mpTotals(w);
-    return '<div class="bar-row"><div class="lbl">' + fmtDate(w.week) + '</div>'
-      + '<div class="bar-track"><div class="bar-fill' + (t.head === maxH ? ' top' : '')
-      + '" style="width:' + (t.head / maxH * 100) + '%"></div></div>'
-      + '<div class="bar-count">' + t.head + '</div></div>';
+  /* Trend across every period recorded. */
+  const maxH = Math.max(1, ...buckets.map(function(b){ return b.manHours; }));
+  document.getElementById('mpTrend').innerHTML = buckets.slice().reverse().map(function(b){
+    return '<div class="bar-row"><div class="lbl">' + mpLabelOf(b.key, mpGrain) + '</div>'
+      + '<div class="bar-track"><div class="bar-fill' + (b.manHours === maxH ? ' top' : '')
+      + '" style="width:' + (b.manHours / maxH * 100) + '%"></div></div>'
+      + '<div class="bar-count">' + hrs(b.manHours) + 'h</div></div>';
   }).join('');
 
-  /* Week by week, role by role. */
-  document.getElementById('mpHead').innerHTML =
-      '<tr><th>Week Ending</th>'
-    + MP_ROLES.map(function(r){ return '<th>' + r.short + '</th>'; }).join('')
-    + '<th>Total</th><th>Hours</th><th>Cost</th></tr>';
+  /* Who those hours belonged to, this period. */
+  document.getElementById('mpRoles').innerHTML =
+      '<div class="table-wrap"><table class="data-table"><thead><tr>'
+    + '<th>Role</th><th>Most On Site</th><th>Man-Hours</th><th>Cost</th><th>Share Of Hours</th>'
+    + '</tr></thead><tbody>'
+    + MP_ROLES.map(function(r){
+        const v = cur.roles[r.id];
+        if(!v) return '';
+        const share = cur.manHours ? Math.round(v.manHours / cur.manHours * 100) : 0;
+        return '<tr><td><b>' + r.label + '</b></td><td>' + v.headPeak + '</td>'
+          + '<td>' + hrs(v.manHours) + '</td><td>' + (v.cost ? fmtMoney(v.cost) : '—') + '</td>'
+          + '<td>' + share + '%</td></tr>';
+      }).join('')
+    + '</tbody></table></div>';
 
-  const pg = pageSlice('mp', weeks.slice().reverse().map(function(w){
-    const t = mpTotals(w);
-    return '<tr><td><b>' + fmtDate(w.week) + '</b></td>'
-      + MP_ROLES.map(function(r){
-          const c = mpNum((w.count||{})[r.id]);
-          return '<td>' + (c == null ? '<span style="color:var(--muted);">—</span>' : c) + '</td>';
-        }).join('')
-      + '<td><b>' + t.head + '</b></td>'
-      + '<td>' + (t.hours ? t.hours.toLocaleString() : '—') + '</td>'
-      + '<td>' + (t.cost ? fmtMoney(t.cost) : '—') + '</td></tr>';
+  /* Every period, newest first. */
+  document.getElementById('mpHead').innerHTML =
+    '<tr><th>' + (mpGrain === 'week' ? 'Week Ending' : mpGrain === 'month' ? 'Month' : 'Year')
+    + '</th><th>Days Worked</th><th>Most On Site</th><th>Man-Hours</th><th>Cost</th>'
+    + '<th>Hours Per Scaffold</th></tr>';
+  const pg = pageSlice('mp', buckets.slice().reverse().map(function(b){
+    const p = mpPerScaffold(b);
+    return '<tr><td><b>' + mpLabelOf(b.key, mpGrain) + '</b></td>'
+      + '<td>' + b.dayCount + '</td><td>' + b.headPeak + '</td>'
+      + '<td>' + hrs(b.manHours) + '</td><td>' + (b.cost ? fmtMoney(b.cost) : '—') + '</td>'
+      + '<td>' + (p ? p.hoursEach + ' <span class="th-sub" style="display:inline;">over ' + p.built + '</span>' : '—') + '</td></tr>';
   }));
   document.getElementById('mpTable').innerHTML = pg.rows.join('');
-  document.getElementById('mpPager').innerHTML = pagerHtml('mp', pg, 'weeks');
+  document.getElementById('mpPager').innerHTML = pagerHtml('mp', pg, mpGrain + 's');
+
   mpRenderForm();
 }
 
@@ -5992,81 +6297,387 @@ function mpRenderForm(){
   const el = document.getElementById('mpForm');
   if(!el) return;
   if(!mpCanEdit()){
-    el.innerHTML = '<div class="notice info">Sign in as Owner or GC Admin to add or change a week.</div>';
+    el.innerHTML = '<div class="notice info">Sign in as Owner or GC Admin to add or change these numbers.</div>';
     return;
   }
-  const weeks = manpowerWeeks();
-  const last = weeks.length ? weeks[weeks.length - 1] : null;
+  const weeks = mpRollup('week');
+  const last = weeks.length ? weeks[weeks.length - 1].key : todayStr();
   el.innerHTML =
       '<div class="mp-form">'
-    + '<label class="lbl">Week ending<input type="date" id="mpWeek" class="input" value="'
-    +   (last ? last.week : todayStr()) + '"></label>'
+    + '<div class="notice info mp-how">'
+    +   '<b>How this works.</b> Pick the week, fill in a row for each role, and save. '
+    +   'You are describing a typical day: <b>how many people</b>, <b>how many hours each</b>, '
+    +   'and <b>how many days</b> they worked that week. '
+    +   'Leave anything you do not know blank &mdash; blank means <i>not known</i> and is left out '
+    +   'of the totals, which is not the same as entering 0.'
+    + '</div>'
+    + '<div class="mp-week-row">'
+    +   '<label class="lbl">Week ending'
+    +     '<input type="date" id="mpWeek" class="input" value="' + last + '">'
+    +   '</label>'
+    +   '<button type="button" class="btn" onclick="mpLoadWeek()">Open this week to edit</button>'
+    +   '<span class="mp-hint">Already entered this week? Pick its date and open it &mdash; '
+    +     'saving again replaces it rather than adding a second copy.</span>'
+    + '</div>'
     + '<div class="table-wrap"><table class="data-table"><thead><tr>'
-    +   '<th>Role</th><th>How many</th><th>Hours each</th><th>Pay rate $/hr</th></tr></thead><tbody>'
+    +   '<th>Role</th><th>How many people</th><th>Hours each per day</th>'
+    +   '<th>Days worked this week</th><th>Pay rate $/hr</th><th>Man-hours</th><th>Cost</th>'
+    + '</tr></thead><tbody>'
     + MP_ROLES.map(function(r){
         return '<tr><td><b>' + r.label + '</b></td>'
-          + '<td><input type="number" min="0" step="1" class="input mp-in" id="mpC-' + r.id + '" placeholder="—"></td>'
-          + '<td><input type="number" min="0" step="0.5" class="input mp-in" id="mpH-' + r.id + '" placeholder="—"></td>'
-          + '<td><input type="number" min="0" step="0.01" class="input mp-in" id="mpR-' + r.id + '" placeholder="—"></td></tr>';
+          + '<td><input type="number" min="0" step="1"   class="input mp-in" id="mpC-' + r.id + '" placeholder="—" oninput="mpPreview()"></td>'
+          + '<td><input type="number" min="0" step="0.5" class="input mp-in" id="mpH-' + r.id + '" placeholder="—" oninput="mpPreview()"></td>'
+          + '<td><input type="number" min="0" max="7" step="1" class="input mp-in" id="mpD-' + r.id + '" placeholder="—" oninput="mpPreview()"></td>'
+          + '<td><input type="number" min="0" step="0.01" class="input mp-in" id="mpR-' + r.id + '" placeholder="—" oninput="mpPreview()"></td>'
+          + '<td id="mpMH-' + r.id + '" class="mp-calc">—</td>'
+          + '<td id="mpCO-' + r.id + '" class="mp-calc">—</td></tr>';
       }).join('')
-    + '</tbody></table></div>'
-    + '<label class="lbl">Note<input type="text" id="mpNoteIn" class="input" placeholder="anything worth remembering about this week"></label>'
-    + '<div style="margin-top:12px;"><button type="button" class="btn btn-primary" onclick="mpSaveWeek()">Save this week</button>'
-    + ' <button type="button" class="btn" onclick="mpLoadWeek()">Load the week shown above</button></div>'
+    + '</tbody><tfoot><tr><th colspan="5" style="text-align:right;">Week total</th>'
+    +   '<th id="mpMHtot" class="mp-calc">—</th><th id="mpCOtot" class="mp-calc">—</th></tr></tfoot>'
+    + '</table></div>'
+
+    + '<label class="lbl mp-note-label" for="mpNoteIn">Note for this week</label>'
+    + '<div class="mp-note-help">Anything that explains the numbers, in your own words &mdash; '
+    +   'weather days, a shutdown, extra crew brought in for a turnaround, someone off sick. '
+    +   'It shows beside the week later, so in three months you still know why that week looks odd. '
+    +   'Leave it empty if there is nothing to say.</div>'
+    + '<textarea id="mpNoteIn" class="input mp-note" rows="3" '
+    +   'placeholder="e.g. Lost Tuesday and Wednesday to weather. Four extra erectors brought in for the DSM3 shutdown."></textarea>'
+
+    + '<div class="mp-actions">'
+    +   '<button type="button" class="btn btn-primary" onclick="mpSaveWeek()">Save this week</button>'
+    +   '<span class="mp-hint">Saves the rows above against the week ending date you picked.</span>'
+    + '</div>'
     + '</div>';
+  mpPreview();
 }
 
-/* Pull an existing week back into the form so it can be corrected rather
-   than retyped from scratch. */
-function mpLoadWeek(){
-  const wk = document.getElementById('mpWeek').value;
-  const w = manpowerWeeks().filter(function(x){ return x.week === wk; })[0];
-  if(!w){ toast('No week saved for ' + (wk ? fmtDate(wk) : 'that date')); return; }
+/* Do the arithmetic as they type, so nobody has to trust the maths blind. */
+function mpPreview(){
+  let mhTot = 0, coTot = 0, anyMH = false, anyCO = false;
   MP_ROLES.forEach(function(r){
+    const n = mpNum((document.getElementById('mpC-'+r.id)||{}).value);
+    const h = mpNum((document.getElementById('mpH-'+r.id)||{}).value);
+    const d = mpNum((document.getElementById('mpD-'+r.id)||{}).value);
+    const p = mpNum((document.getElementById('mpR-'+r.id)||{}).value);
+    const mhEl = document.getElementById('mpMH-'+r.id);
+    const coEl = document.getElementById('mpCO-'+r.id);
+    if(n == null || h == null || d == null){
+      if(mhEl) mhEl.textContent = '—';
+      if(coEl) coEl.textContent = '—';
+      return;
+    }
+    const mh = n * h * d;
+    mhTot += mh; anyMH = true;
+    if(mhEl) mhEl.textContent = Math.round(mh).toLocaleString();
+    if(p == null){ if(coEl) coEl.textContent = '—'; return; }
+    const co = mh * p; coTot += co; anyCO = true;
+    if(coEl) coEl.textContent = fmtMoney(co);
+  });
+  const a = document.getElementById('mpMHtot'), b = document.getElementById('mpCOtot');
+  if(a) a.textContent = anyMH ? Math.round(mhTot).toLocaleString() : '—';
+  if(b) b.textContent = anyCO ? fmtMoney(coTot) : '—';
+}
+
+/* Pull a saved week back into the form so it can be corrected rather
+   than retyped. The stored rows are per day, so read one day back out
+   and report how many days that week covered. */
+function mpLoadWeek(){
+  const wk = (document.getElementById('mpWeek')||{}).value;
+  if(!wk){ toast('Pick the week ending date first'); return; }
+  const key = mpWeekKey(wk);
+  const mine = mpRows().filter(function(r){ return mpWeekKey(r.d) === key; });
+  if(!mine.length){ toast('Nothing saved for the week ending ' + fmtDate(key)); return; }
+  MP_ROLES.forEach(function(r){
+    const rows = mine.filter(function(x){ return x.r === r.id; });
     const set = function(pre, v){
       const el = document.getElementById(pre + r.id);
       if(el) el.value = (v == null ? '' : v);
     };
-    set('mpC-', (w.count||{})[r.id]);
-    set('mpH-', (w.hours||{})[r.id]);
-    set('mpR-', (w.rate ||{})[r.id]);
+    if(!rows.length){ set('mpC-', null); set('mpH-', null); set('mpD-', null); set('mpR-', null); return; }
+    set('mpC-', rows[0].n); set('mpH-', rows[0].h); set('mpD-', rows.length); set('mpR-', rows[0].p);
   });
-  const n = document.getElementById('mpNoteIn'); if(n) n.value = w.note || '';
-  toast('Loaded week ending ' + fmtDate(wk));
+  const n = document.getElementById('mpNoteIn');
+  if(n) n.value = (mine.filter(function(x){ return x.note; })[0] || {}).note || '';
+  document.getElementById('mpWeek').value = key;
+  mpPreview();
+  toast('Opened the week ending ' + fmtDate(key) + ' — change what you need and save');
 }
 
 function mpSaveWeek(){
-  const wk = document.getElementById('mpWeek').value;
+  const wk = (document.getElementById('mpWeek')||{}).value;
   if(!wk){ toast('Pick the week ending date first'); return; }
-  const grab = function(pre){
-    const o = {};
-    MP_ROLES.forEach(function(r){
-      const el = document.getElementById(pre + r.id);
-      const raw = el ? String(el.value).trim() : '';
-      /* Empty stays empty. A blank turned into 0 would read as "AMECO had
-         nobody in that role", which is a very different claim. */
-      if(raw !== '' && isFinite(Number(raw))) o[r.id] = Number(raw);
-    });
-    return o;
-  };
-  const rec = { week: wk, count: grab('mpC-'), hours: grab('mpH-'), rate: grab('mpR-'),
-                note: (document.getElementById('mpNoteIn')||{}).value || '' };
-  if(!Object.keys(rec.count).length){ toast('Enter at least one headcount'); return; }
+  const key = mpWeekKey(wk);
+  const note = ((document.getElementById('mpNoteIn')||{}).value || '').trim();
 
-  const before = (state.manpower || []).filter(function(x){ return x.week !== wk; });
-  const replaced = before.length !== (state.manpower || []).length;
-  state.manpower = before.concat([rec]);
-  const wasHead = replaced
-    ? ((state.manpower || []).filter(function(x){ return x.week === wk; })[0]
-        ? mpTotals((state.manpower || []).filter(function(x){ return x.week === wk; })[0]).head
-        : '')
-    : '';
+  /* Spread the week across real dates, working back from the week end,
+     so every stored row is a day and the rollups stay honest. */
+  const rows = [];
+  MP_ROLES.forEach(function(r){
+    const n = mpNum((document.getElementById('mpC-'+r.id)||{}).value);
+    const h = mpNum((document.getElementById('mpH-'+r.id)||{}).value);
+    const d = mpNum((document.getElementById('mpD-'+r.id)||{}).value);
+    const p = mpNum((document.getElementById('mpR-'+r.id)||{}).value);
+    if(n == null) return;
+    const days = (d == null || d < 1) ? 1 : Math.min(7, Math.round(d));
+    for(let i = 0; i < days; i++){
+      const dt = new Date(key + 'T00:00:00');
+      dt.setDate(dt.getDate() - i);
+      rows.push({ d: dt.toISOString().slice(0,10), r: r.id, n: n,
+                  h: h, p: p, note: i === 0 ? note : '' , src: 'typed' });
+    }
+  });
+  if(!rows.length){ toast('Enter at least one headcount before saving'); return; }
+
+  const before = mpRows().filter(function(x){ return mpWeekKey(x.d) !== key; });
+  const replaced = before.length !== mpRows().length;
+  state.manpower = before.concat(rows);
+  const b = mpRollup('week', rows)[0];
   audit(replaced ? 'Manpower week updated' : 'Manpower week added',
-        'Week ending ' + fmtDate(wk), 'people on site',
-        wasHead === '' ? '(none)' : String(wasHead), String(mpTotals(rec).head));
+        'Week ending ' + fmtDate(key), 'man-hours', replaced ? '(replaced)' : '(new)',
+        String(Math.round(b.manHours)));
   saveState();
   renderManpower();
-  toast((replaced ? 'Updated' : 'Saved') + ' week ending ' + fmtDate(wk));
+  toast((replaced ? 'Updated' : 'Saved') + ' the week ending ' + fmtDate(key)
+        + ' — ' + Math.round(b.manHours).toLocaleString() + ' man-hours');
+}
+
+
+/* ---- Uploading the builder's own manpower report -------------------
+   No real file has been seen yet, so this does not assume a shape. It
+   reads .csv or .xlsx, finds the columns by their headings whatever
+   order they are in, and tells you exactly what it matched before it
+   commits anything. Guessing silently is how you end up with a month of
+   hours filed against the wrong role.
+
+   There is also a template to hand the builder, so the file that comes
+   back is one this already understands. */
+
+const MP_COLS = {
+  date:  ['date','day','work date','shift date','week ending','week','period'],
+  role:  ['role','craft','classification','position','title','trade','job title'],
+  count: ['people','headcount','head count','qty','quantity','count','men','workers','no of men','number'],
+  hours: ['hours','hrs','hours each','hours per person','man hours','manhours','man-hours','total hours'],
+  rate:  ['rate','pay rate','$/hr','hourly rate','wage','cost per hour','hr rate']
+};
+function mpMatchCols(header){
+  const norm = header.map(function(h){ return String(h == null ? '' : h).trim().toLowerCase(); });
+  const found = {};
+  Object.keys(MP_COLS).forEach(function(want){
+    let idx = -1;
+    MP_COLS[want].forEach(function(alias){
+      if(idx >= 0) return;
+      const hit = norm.indexOf(alias);
+      if(hit >= 0) idx = hit;
+    });
+    if(idx < 0){
+      norm.forEach(function(h, i){
+        if(idx >= 0 || !h) return;
+        if(MP_COLS[want].some(function(a){ return h.indexOf(a) >= 0; })) idx = i;
+      });
+    }
+    found[want] = idx;
+  });
+  return found;
+}
+/* Free-text role names off a real report, mapped to the six we track.
+   Anything unrecognised is reported back rather than quietly dropped. */
+function mpRoleFromText(txt){
+  const t = String(txt || '').toLowerCase();
+  if(!t) return null;
+  /* Written as they actually appear on a site report, abbreviations and
+     all. A test caught "Supt" missing -- common on paper, and silently
+     unmatched rows are worse than an obvious failure. */
+  if(/(general\s*fore|gen\s*fore|^gf$)/.test(t)) return 'genForem';
+  if(/(fore|^fm$)/.test(t)) return 'foreman';
+  if(/(super|supt|supv)/.test(t)) return 'super';
+  /* No word-boundary escape here either -- it becomes a backspace. */
+  if(/(project\s*manager)/.test(t) || t === 'pm' || /(^|[^a-z])pm([^a-z]|$)/.test(t)) return 'pm';
+  if(/(erect|builder|scaffolder|journey)/.test(t)) return 'erector';
+  if(/(help|labor|labour|appren|ground)/.test(t)) return 'helper';
+  return null;
+}
+function mpParseDate(v){
+  if(v == null || v === '') return null;
+  if(v instanceof Date) return v.toISOString().slice(0,10);
+  const s = String(v).trim();
+  if(/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0,10);
+  let m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+  if(m){
+    const y = m[3].length === 2 ? '20' + m[3] : m[3];
+    return y + '-' + String(m[1]).padStart(2,'0') + '-' + String(m[2]).padStart(2,'0');
+  }
+  const n = Number(s);
+  if(isFinite(n) && n > 40000 && n < 60000 && typeof xlsxSerialToISO === 'function'){
+    return xlsxSerialToISO(n);
+  }
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d.toISOString().slice(0,10);
+}
+
+function mpSay(t, cls){
+  const el = document.getElementById('mpMsg');
+  if(el){ el.innerHTML = t; el.className = 'wk-msg ' + (cls || ''); }
+}
+
+async function mpUploadFile(file){
+  if(!file) return;
+  if(!mpCanEdit()){ mpSay('Sign in as Owner or GC Admin to load a manpower report.', 'err'); return; }
+  try {
+    mpSay('Reading ' + file.name + '…');
+    let rows;
+    if(/\.csv$/i.test(file.name)){
+      const text = await file.text();
+      /* THE ESCAPING RULE: this file is generated from a Python string,
+         where a backslash-r or backslash-n inside a regex literal becomes
+         a REAL carriage return or newline and breaks the pattern. Build
+         the separators from character codes so no escape is written. */
+      const LF = String.fromCharCode(10), CR = String.fromCharCode(13);
+      rows = text.split(LF).map(function(l){ return l.split(CR).join(''); })
+                 .filter(function(l){ return l.trim(); })
+                 .map(function(l){
+                    /* quoted commas are common in exported reports */
+                    const out = []; let cur = '', q = false;
+                    for(let i = 0; i < l.length; i++){
+                      const c = l[i];
+                      if(c === '"'){ q = !q; continue; }
+                      if(c === ',' && !q){ out.push(cur); cur = ''; continue; }
+                      cur += c;
+                    }
+                    out.push(cur); return out;
+                 });
+    } else if(/\.xlsx$/i.test(file.name)){
+      const buf = await file.arrayBuffer();
+      const entries = await xlsxEntries(buf);
+      let sheet = null;
+      const wbXml = await xlsxText(entries, 'xl/workbook.xml');
+      const names = (wbXml.match(/name="([^"]+)"/g) || []).map(function(m){ return m.slice(6,-1); });
+      for(const n of names){
+        try { const r = await xlsxReadSheet(buf, n);
+              if(r && r.length > 1){ sheet = r; break; } } catch(e){}
+      }
+      rows = sheet;
+    } else {
+      mpSay('That is not a .csv or .xlsx file.', 'err'); return;
+    }
+    if(!rows || rows.length < 2){ mpSay('That file has no rows in it.', 'err'); return; }
+
+    /* Find the header row: the first with at least two columns we know. */
+    let hIdx = -1, cols = null;
+    for(let i = 0; i < Math.min(rows.length, 15); i++){
+      const c = mpMatchCols(rows[i] || []);
+      const known = Object.keys(c).filter(function(k){ return c[k] >= 0; }).length;
+      if(known >= 3){ hIdx = i; cols = c; break; }
+    }
+    if(hIdx < 0){
+      mpSay('Could not find the headings in that file. It needs a row with '
+        + '<b>Date</b>, <b>Role</b>, <b>People</b> and <b>Hours</b> across it. '
+        + 'Use the template button below and the file will come back in a shape this understands.', 'err');
+      return;
+    }
+
+    const out = [], unknownRoles = {}, skipped = { noDate:0, noRole:0, noCount:0 };
+    for(let i = hIdx + 1; i < rows.length; i++){
+      const r = rows[i] || [];
+      const d = mpParseDate(cols.date  >= 0 ? r[cols.date]  : null);
+      const role = mpRoleFromText(cols.role >= 0 ? r[cols.role] : '');
+      const n = mpNum(cols.count >= 0 ? r[cols.count] : null);
+      const h = mpNum(cols.hours >= 0 ? r[cols.hours] : null);
+      const p = mpNum(cols.rate  >= 0 ? r[cols.rate]  : null);
+      if(!d){ if(r.some(function(x){ return x !== null && x !== ''; })) skipped.noDate++; continue; }
+      if(!role){
+        const raw = String((cols.role >= 0 ? r[cols.role] : '') || '').trim();
+        if(raw) unknownRoles[raw] = (unknownRoles[raw] || 0) + 1; else skipped.noRole++;
+        continue;
+      }
+      if(n == null){ skipped.noCount++; continue; }
+      out.push({ d: d, r: role, n: n, h: h, p: p, note: '', src: 'file:' + file.name });
+    }
+    if(!out.length){
+      mpSay('Nothing usable in that file. ' + Object.keys(unknownRoles).length
+        + ' unrecognised role name(s): ' + Object.keys(unknownRoles).slice(0,6).join(', '), 'err');
+      return;
+    }
+
+    /* Replace by day, so re-loading a corrected report does not double up. */
+    const touched = {};
+    out.forEach(function(r){ touched[r.d] = 1; });
+    const kept = mpRows().filter(function(r){ return !touched[r.d]; });
+    const replacedDays = mpRows().length - kept.length;
+    state.manpower = kept.concat(out);
+
+    const b = mpRollup('week', out);
+    const totalMH = b.reduce(function(s,x){ return s + x.manHours; }, 0);
+    audit('Manpower report loaded', file.name, 'day-rows', String(replacedDays), String(out.length));
+    saveState();
+    renderManpower();
+
+    let msg = '<b>Loaded ' + out.length + ' rows</b> covering ' + Object.keys(touched).length
+      + ' day' + (Object.keys(touched).length === 1 ? '' : 's') + ' &mdash; '
+      + Math.round(totalMH).toLocaleString() + ' man-hours.'
+      + (replacedDays ? ' Replaced ' + replacedDays + ' row(s) for the same days.' : '')
+      + '<br><span class="mp-hint">Matched columns: '
+      + Object.keys(cols).filter(function(k){ return cols[k] >= 0; })
+          .map(function(k){ return k + ' &rarr; "' + rows[hIdx][cols[k]] + '"'; }).join(', ') + '.</span>';
+    const un = Object.keys(unknownRoles);
+    if(un.length) msg += '<br><b style="color:var(--red);">Skipped ' + un.length
+      + ' role name(s) this does not recognise:</b> ' + un.slice(0,8).join(', ')
+      + '. Rename them in the file to Project Manager, Superintendent, General Foreman, '
+      + 'Foreman, Erector or Helper and load it again.';
+    if(skipped.noDate || skipped.noCount) msg += '<br><span class="mp-hint">Also skipped '
+      + (skipped.noDate ? skipped.noDate + ' row(s) with no readable date' : '')
+      + (skipped.noDate && skipped.noCount ? ' and ' : '')
+      + (skipped.noCount ? skipped.noCount + ' with no headcount' : '') + '.</span>';
+    mpSay(msg, 'ok');
+  } catch(e){
+    mpSay(e && e.message ? e.message : 'That file could not be read.', 'err');
+  }
+}
+
+/* A template to hand the builder, so what comes back already fits. */
+function mpDownloadTemplate(){
+  /* Same escaping rule: a backslash-n here becomes a real newline and
+     breaks the string literal. Join with a character code instead. */
+  const NL = String.fromCharCode(10);
+  const head = 'Date,Role,People,Hours Each,Pay Rate' + NL;
+  const eg = [
+    ['2026-08-10','Superintendent',1,10,''],
+    ['2026-08-10','General Foreman',2,10,''],
+    ['2026-08-10','Foreman',4,10,''],
+    ['2026-08-10','Erector',28,10,''],
+    ['2026-08-10','Helper',12,10,'']
+  ].map(function(r){ return r.join(','); }).join(NL);
+  const blob = new Blob([head + eg + NL], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'manpower-template.csv';
+  a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
+  toast('Template downloaded — send it to ' + builderName() + ' to fill in');
+}
+
+function mpWireDrop(){
+  const z = document.getElementById('mpDrop');
+  if(!z || z.dataset.dropWired) return;
+  z.dataset.dropWired = '1';
+  const stop = function(e){ e.preventDefault(); e.stopPropagation(); };
+  ['dragenter','dragover'].forEach(function(ev){
+    z.addEventListener(ev, function(e){ stop(e); z.classList.add('drag'); });
+  });
+  ['dragleave','dragend'].forEach(function(ev){
+    z.addEventListener(ev, function(e){ stop(e); z.classList.remove('drag'); });
+  });
+  z.addEventListener('drop', function(e){
+    stop(e); z.classList.remove('drag');
+    const dt = e.dataTransfer;
+    let f = dt && dt.files && dt.files.length ? dt.files[0] : null;
+    if(!f && dt && dt.items){
+      for(let i = 0; i < dt.items.length; i++){
+        if(dt.items[i].kind === 'file'){ f = dt.items[i].getAsFile(); break; }
+      }
+    }
+    if(f) mpUploadFile(f);
+  });
 }
 
 /* ---------------- HISTORY ----------------
@@ -6307,7 +6918,7 @@ function renderWeekly(){
       + STANDING_LIMIT_DAYS + ' during this window and started charging.<br><br>'
       + '<b>The lesson:</b> taking down an old scaffold cuts rent. Taking down a new one does not. '
       + 'To cut the rental bill, go after the ones that have been up longest.'
-      + RENT_ONLY_NOTE + '</div>';
+      + rentOnlyNote() + '</div>';
   } else if(d.standingDelta > 0 && d.burnDelta < 0){
     note.innerHTML = '<div class="notice info" style="margin-top:12px;">'
       + '<b>More scaffolds, and a smaller bill. Here is why.</b><br>'
@@ -6317,13 +6928,13 @@ function renderWeekly(){
       + '</b> of the ' + d.removed.length + ' were past their ' + STANDING_LIMIT_DAYS
       + ' rent-free days &mdash; and the new ones going up are still inside their rent-free window, '
       + 'so no rent is running on them yet. Worth watching: they start charging as they age.'
-      + RENT_ONLY_NOTE + '</div>';
+      + rentOnlyNote() + '</div>';
   } else if(d.standingDelta === 0 && d.burnDelta > 0){
     note.innerHTML = '<div class="notice warn" style="margin-top:12px;">'
       + '<b>Same number of scaffolds, bigger bill.</b> The count did not move, but '
       + fmtMoney(d.burnDelta) + '/day more is going out because <b>' + crossed
       + '</b> scaffolds crossed their ' + STANDING_LIMIT_DAYS
-      + '-day rent-free window and started charging.' + RENT_ONLY_NOTE + '</div>';
+      + '-day rent-free window and started charging.' + rentOnlyNote() + '</div>';
   } else {
     note.innerHTML = '';
   }
@@ -6467,7 +7078,7 @@ function renderHistory(){
     + kpi('Cancelled', cancelled,
           'requested and then called off &mdash; never actually built, never cost anything')
     + (awaiting ? kpi('Awaiting Erection', awaiting,
-          'approved and waiting on AMECO to build &mdash; work is blocked until they do') : '')
+          'approved and waiting on ' + builderName() + ' to build &mdash; work is blocked until they do') : '')
     + (medStood != null ? kpi('Typical Life', medStood + ' days',
           'half the closed scaffolds in ' + where + ' stood longer than this, half shorter')
         : '')
@@ -6480,7 +7091,7 @@ function renderHistory(){
   const dn = document.getElementById('histDatesNote');
   if(dn) dn.innerHTML = stood.length
     ? '<b>Erect and dismantle dates are both real.</b> The day each scaffold went up comes '
-      + 'from AMECO&rsquo;s All Scaffolds tab; the day it came down comes from its dismantle '
+      + 'from the builder&rsquo;s All Scaffolds tab; the day it came down comes from its dismantle '
       + 'work order. <b>' + stood.length + '</b> of the <b>' + rows.length
       + '</b> closed records have both, so how long they actually stood is measured, not estimated. '
       + 'Ignore the report&rsquo;s own Days Standing column &mdash; it keeps counting to today even '
@@ -6683,6 +7294,23 @@ function renderDashboard(){
   // A blunt, hard-to-ignore dollar number for scaffolds sitting overdue on a
   // paid rental -- nothing gets something torn down faster than watching
   // money bleed on screen.
+  /* Say plainly which report the numbers on this page come from. Without
+     it, "249 standing" is a number with no date on it, and there is no way
+     to tell whether the last file that went in actually landed here. */
+  const asOfEl = document.getElementById('dashAsOf');
+  if(asOfEl){
+    const ao = registerAsOf();
+    const snaps = (typeof snapshotsSorted === 'function') ? snapshotsSorted() : [];
+    const newer = ao ? snaps.filter(function(x){ return x.date > ao; }) : [];
+    asOfEl.innerHTML = ao
+      ? '<div class="as-of">Showing the <b>' + fmtDate(ao) + '</b> ' + builderName() + ' report'
+        + (snaps.length > 1 ? ' &middot; ' + snaps.length + ' reports loaded, compare them under History' : '')
+        + (newer.length ? ' &middot; <b style="color:var(--red);">' + newer.length
+             + ' newer report' + (newer.length===1?'':'s') + ' loaded but not applied</b>' : '')
+        + '</div>'
+      : '<div class="as-of">No report date recorded for these numbers yet.</div>';
+  }
+
   const exposureBanner = document.getElementById('costExposureBanner');
   const M = moneyTotals(recs);
   const overdueWithRate = recs.filter(isOverdue);
@@ -11005,7 +11633,7 @@ init();
      scaffolds never clobber one another. */
   var CONFIG_FIELDS = ["notifications","directory","nextNum","notifiedOverdue",
                        "rental","roles","auditLog","buildings","buildingFloors",
-                       "grid","notify","snapshots","manpower"];
+                       "grid","notify","snapshots","manpower","registerAsOf"];
   var CLIENT = "c" + Math.random().toString(36).slice(2);
   var db, auth, isAllowed = false, isOwner = false;
   var lastSync = {}, lastCfg = "", pushTimer = null, renderQueued = false;
