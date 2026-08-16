@@ -1597,6 +1597,12 @@ textarea.mp-note{ display:block; width:100%; max-width:none; min-height:76px;
   resize:vertical; font:inherit; line-height:1.5; padding:var(--sp-2) var(--sp-3); }
 .mp-actions{ display:flex; align-items:center; gap:var(--sp-3); flex-wrap:wrap; margin-top:var(--sp-4); }
 @media (max-width:640px){ .mp-form .mp-in{ max-width:none; } }
+
+/* The live rent on the floor-plan strip. It is deliberately the only
+   money figure there, and it is the same call the dashboard makes. */
+.pw-live{ margin-left:auto; }
+.pw-live b{ color:var(--ink); }
+@media (max-width:640px){ .pw-live{ margin-left:0; } }
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
@@ -3844,6 +3850,23 @@ function computeDueDate(rec){
 
 function isStanding(rec){ return STANDING_STATUSES.includes(rec.lifecycleStatus); }
 
+/* "Is this scaffold up right now?" -- ONE answer, used by every surface.
+
+   An audit found four different tests for this scattered around:
+     isStanding(rec)
+     !r.dateDismantled
+     r.lifecycleStatus !== 'Dismantled'
+     r.dateBuilt && !r.dateDismantled
+   They agree today only because no live record has a dismantle date and
+   every one is Built or Ready-to-Dismantle. They would not agree the
+   moment a request sits in Pending GC Approval: the floor plan counted
+   'not Dismantled' and would have drawn a pin for a scaffold nobody has
+   built yet, while the dashboard counted it as pending. Two screens,
+   two counts, same site.
+
+   Both conditions, one place. */
+function isUpNow(rec){ return isStanding(rec) && !rec.dateDismantled; }
+
 function isOverdue(rec){
   if(!rec.dueDate) return false;
   if(!isStanding(rec)) return false;
@@ -3886,7 +3909,7 @@ function historicalOverrunDays(discipline, building){
 // flag is explainable in one sentence.
 function smartFlags(){
   const flags = [];
-  const active = visibleRecords().filter(r=>r.lifecycleStatus!=='Dismantled');
+  const active = visibleRecords().filter(isUpNow);   /* one predicate, everywhere */
 
   const overdueByBuilder = {};
   state.records.filter(isOverdueAny).forEach(r=>{
@@ -4033,7 +4056,7 @@ function scorecardStats(records){
    rather than being faked from in-flight jobs.
    -------------------------------------------------------------------- */
 function liveScorecardStats(records){
-  const standing = records.filter(function(r){ return r.dateBuilt && !r.dateDismantled; });
+  const standing = records.filter(function(r){ return r.dateBuilt && isUpNow(r); });
   if(!standing.length) return null;
   const ages = standing.map(function(r){ return daysStanding(r); }).filter(function(d){ return d != null; });
   const avgDays = ages.length ? Math.round(ages.reduce(function(a,b){ return a+b; },0)/ages.length) : 0;
@@ -4511,6 +4534,31 @@ function dailyBurn(rec){
    the cost rollup all read this one object. Any screen that does its own
    arithmetic instead is a mismatch waiting to happen -- which is exactly
    how the banner and the bleed card came to disagree. */
+/* THE ONE ANSWER to "what is this costing per day".
+
+   BDiaz caught the Dashboard saying DSM4 was $1,206.83/day while the
+   Floor Plan said $1,118.49/day. Both were 'right' and neither was
+   comparable, because they were three different things at once:
+
+     - a different AS-OF DATE. The dashboard ages every scaffold to
+       today; the floor plan strip aged them only to the 10 Aug report,
+       five days behind.
+     - a different FREE PERIOD. The dashboard uses each builder's own
+       terms via rentalPolicyFor(); the strip used a flat 60 days.
+     - a different SOURCE. Live register versus a stored snapshot.
+
+   Two numbers on two screens for the same building is not a rounding
+   difference, it is a reason to stop trusting the tool. So there is now
+   exactly one function, and every surface calls it. */
+function recordsIn(building){
+  const all = state.records || [];
+  return (!building || building === 'ALL')
+    ? all : all.filter(function(r){ return r.building === building; });
+}
+function burnToday(building){
+  return moneyTotals(recordsIn(building)).burn;
+}
+
 function moneyTotals(recs){
   const list = (recs || visibleRecords());
   const standing = list.filter(isStanding);
@@ -6710,7 +6758,7 @@ function historyFor(b){
 /* Standing counts come from the live register so History and the
    Dashboard can never disagree about what is still up. */
 function standingFor(b){
-  const recs = state.records.filter(function(r){ return r.tag && !r.dateDismantled; });
+  const recs = state.records.filter(function(r){ return r.tag && isUpNow(r); });
   return b === 'ALL' ? recs : recs.filter(function(r){ return r.building === b; });
 }
 /* Remember which sections were left open, per person, so the page comes
@@ -6870,10 +6918,11 @@ function renderWeekly(){
       delta('Scaffolds Standing', d.standingDelta, num, true,
             Math.abs(d.standingDelta) + (d.standingDelta < 0 ? ' fewer' : ' more')
             + ' are up now than on ' + A + ' (' + prev.standing + ' then, ' + curr.standing + ' now)')
-    + delta('Rent Per Day', d.burnDelta, fmtMoney, true,
-            'you are paying ' + fmtMoney(Math.abs(d.burnDelta))
-            + (d.burnDelta > 0 ? ' more' : ' less') + ' every day than on ' + A
-            + ' (' + fmtMoney(prev.burn) + ' then, ' + fmtMoney(curr.burn) + ' now)')
+    + delta('Rent Per Day, As Reported', d.burnDelta, fmtMoney, true,
+            'as at those two report dates, not today &mdash; the Dashboard and Floor Plan show '
+            + 'what is running right now. You were paying ' + fmtMoney(Math.abs(d.burnDelta))
+            + (d.burnDelta > 0 ? ' more' : ' less') + ' a day on ' + B + ' than on ' + A
+            + ' (' + fmtMoney(prev.burn) + ' then, ' + fmtMoney(curr.burn) + ' at that point)')
     + delta('Now Charging Rent', d.onRentDelta, num, true,
             Math.abs(d.onRentDelta) + (d.onRentDelta > 0 ? ' more have' : ' fewer have')
             + ' used up their ' + STANDING_LIMIT_DAYS + ' rent-free days and started renting ('
@@ -7284,7 +7333,7 @@ function renderDashboard(){
         }).join('');
   }
   const scopeName = dashBldg === 'ALL' ? 'Entire Site' : dashBldg;
-  const recs = dashBldg === 'ALL' ? state.records : state.records.filter(function(r){ return r.building === dashBldg; });
+  const recs = recordsIn(dashBldg);   /* same helper the floor plan uses */
   const standing = recs.filter(isStanding);
   const pending = recs.filter(r=>r.lifecycleStatus==='Pending GC Approval' || r.lifecycleStatus==='Modify Requested');
   const ready = recs.filter(r=>r.lifecycleStatus==='Ready to Dismantle - Awaiting Requestor Approval');
@@ -8532,7 +8581,7 @@ function renderFloorPlan(){
     '<button class="building-tab'+(state.planBuilding===b?' active':'')+'" onclick="setPlanBuilding(\''+b+'\')">'+b+'</button>'
   ).join('')+'</div>';
   tabsHtml += '<div class="floor-tabs">'+bldFloors.map(f=>
-    '<button class="floor-tab'+(state.planFloor===f?' active':'')+'" onclick="setPlanFloor(\''+f+'\')">'+f+' <span style="opacity:.7;">('+visibleRecords().filter(r=>r.building===state.planBuilding && r.floor===f && r.lifecycleStatus!=='Dismantled').length+')</span></button>'
+    '<button class="floor-tab'+(state.planFloor===f?' active':'')+'" onclick="setPlanFloor(\''+f+'\')">'+f+' <span style="opacity:.7;">('+visibleRecords().filter(r=>r.building===state.planBuilding && r.floor===f && isUpNow(r)).length+')</span></button>'
   ).join('')+'</div>';
   document.getElementById('floorTabs').innerHTML = tabsHtml;
   renderPlanWeekStrip();
@@ -8543,7 +8592,7 @@ function renderFloorPlan(){
   const gridCheckbox = document.getElementById('gridToggle');
   if(gridCheckbox) gridCheckbox.checked = !!state.showGrid;
 
-  const recs = visibleRecords().filter(r=>r.building===state.planBuilding && r.floor===state.planFloor && r.lifecycleStatus!=='Dismantled' && r.pin);
+  const recs = visibleRecords().filter(r=>r.building===state.planBuilding && r.floor===state.planFloor && isUpNow(r) && r.pin);
   let html = '';
   if(hasFloorPlan(state.planBuilding, state.planFloor)){
     html += '<img src="data:image/png;base64,'+IMAGES[state.planBuilding][state.planFloor]+'">';
@@ -8608,7 +8657,9 @@ function renderPlanWeekStrip(){
     el.innerHTML = '<div class="pw-strip"><span class="pw-when">'
       + fmtDate(from) + ' → ' + fmtDate(to) + '</span>'
       + '<span class="pw-none">No ' + state.planBuilding
-      + ' scaffolds in either report.</span></div>';
+      + ' scaffolds in either report.</span>'
+      + '<span class="pw-cell pw-live"><b>' + fmtMoney(burnToday(state.planBuilding))
+      + '/day</b> right now</span></div>';
     return;
   }
 
@@ -8620,27 +8671,21 @@ function renderPlanWeekStrip(){
     return '<span class="pw-n ' + (good ? 'good' : 'bad') + '">'
          + (n > 0 ? '+' : '−') + Math.abs(n) + '</span>';
   };
-  /* null means the snapshot could not produce a figure. Saying
-     "unchanged" in that case is a claim the data does not support --
-     the whole reason he stopped trusting the last version. */
-  const money = b.burnDelta;
-
+  /* The rent shown here is TODAY'S, from the same call the dashboard
+     makes, so the two can never disagree. The report-to-report rent
+     movement lives in Week Over Week, where both ends of the comparison
+     come from reports and are therefore on the same footing. Putting a
+     live figure and a report figure side by side on one line is exactly
+     what made these numbers look wrong. */
+  const rentNow = burnToday(state.planBuilding);
   el.style.display = '';
   el.innerHTML = '<div class="pw-strip">'
     + '<span class="pw-when">' + wkLabel(from) + ' → ' + wkLabel(to) + '</span>'
     + '<span class="pw-cell"><b>' + b.now + '</b> standing ' + cnt(b.net, true) + '</span>'
     + '<span class="pw-cell pw-up">' + b.added + ' went up</span>'
     + '<span class="pw-cell pw-down">' + b.removed + ' came down</span>'
-    + '<span class="pw-cell">'
-    +   (money == null
-         ? 'rent <span class="pw-flat">not in this report</span>'
-         : (money
-            ? 'rent <span class="pw-n ' + (money > 0 ? 'bad' : 'good') + '">'
-              + (money > 0 ? '+' : '−') + fmtMoney(Math.abs(money)) + '/day</span>'
-              + ' <span class="pw-flat">(now ' + fmtMoney(b.burnNow) + '/day)</span>'
-            : 'rent <span class="pw-flat">flat at ' + fmtMoney(b.burnNow) + '/day</span>'))
-    + '</span>'
-    + '<button type="button" class="pw-more" onclick="gotoWeekOverWeek()">'
+    + '<span class="pw-cell pw-live"><b>' + fmtMoney(rentNow) + '/day</b> right now</span>'
+        + '<button type="button" class="pw-more" onclick="gotoWeekOverWeek()">'
     +   'Week Over Week ›</button>'
     + '</div>';
 }
