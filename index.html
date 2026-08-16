@@ -1469,30 +1469,39 @@ footer{text-align:center;color:#9aa3af;font-size:var(--fs-2xs);margin-top:30px;p
 
 @media(max-width:960px){.kpi-grid{grid-template-columns:repeat(3,1fr);}.form-grid{grid-template-columns:1fr;}.meta-grid{grid-template-columns:1fr;}}
 
-/* ---- floor plan: week-over-week strip ---------------------------- */
+/* ---- floor plan: the week-over-week strip ------------------------
+   Columns with their own headings, matching the What Changed By Building
+   table on History so the two screens read the same way. */
 .pw-strip{
-  display:flex; align-items:center; flex-wrap:wrap; gap:var(--sp-3);
-  margin:var(--sp-3) 0 0; padding:var(--sp-2) var(--sp-3);
+  display:flex; align-items:flex-end; flex-wrap:wrap; gap:var(--sp-5);
+  margin:var(--sp-3) 0 0; padding:var(--sp-3) var(--sp-4);
   border:1px solid var(--border); border-radius:var(--r-md);
-  background:var(--panel-fill-2); font-size:var(--fs-xs); line-height:1.5;
+  background:var(--panel-fill-2); line-height:1.35;
 }
-.pw-when{ font-weight:var(--fw-medium); color:var(--muted); letter-spacing:.02em;
-  white-space:nowrap; }
-.pw-cell{ color:var(--ink); white-space:nowrap; }
-.pw-cell b{ font-size:var(--fs-base); }
-.pw-up::before{ content:'▲'; color:var(--amber); margin-right:4px; font-size:var(--fs-3xs); }
-.pw-down::before{ content:'▼'; color:var(--green); margin-right:4px; font-size:var(--fs-3xs); }
+.pw-bldg{ font-weight:var(--fw-bold); font-size:var(--fs-sm); color:var(--ink);
+  align-self:center; padding-right:var(--sp-2); border-right:1px solid var(--border); }
+.pw-col{ display:flex; flex-direction:column; gap:var(--sp-hair); }
+.pw-head{ font-size:var(--fs-3xs); color:var(--muted); text-transform:uppercase;
+  letter-spacing:.06em; white-space:nowrap; }
+.pw-sub{ display:block; text-transform:none; letter-spacing:0; font-size:var(--fs-3xs);
+  color:var(--muted); opacity:.85; }
+.pw-val{ font-size:var(--fs-base); color:var(--ink); white-space:nowrap;
+  font-variant-numeric:tabular-nums; }
+.pw-val b{ font-weight:var(--fw-bold); }
 .pw-n{ font-weight:var(--fw-bold); }
 .pw-n.good{ color:var(--green); }
 .pw-n.bad{ color:var(--red); }
 .pw-flat{ color:var(--muted); }
-.pw-none{ color:var(--muted); }
-.pw-more{ margin-left:auto; background:none; border:0; padding:0 2px;
-  color:var(--accent); font:inherit; font-weight:var(--fw-medium); cursor:pointer; }
+.pw-none{ color:var(--muted); align-self:center; }
+.pw-live{ margin-left:auto; }
+.pw-more{ align-self:center; background:none; border:0; padding:0 2px;
+  color:var(--accent); font:inherit; font-size:var(--fs-2xs);
+  font-weight:var(--fw-medium); cursor:pointer; white-space:nowrap; }
 .pw-more:hover{ text-decoration:underline; }
-@media (max-width:640px){
-  .pw-strip{ gap:var(--sp-2); font-size:var(--fs-2xs); }
-  .pw-more{ margin-left:0; }
+@media (max-width:760px){
+  .pw-strip{ gap:var(--sp-4); padding:var(--sp-3); }
+  .pw-bldg{ border-right:0; width:100%; }
+  .pw-live{ margin-left:0; }
 }
 
 /* ---- collapsible cards (History) --------------------------------
@@ -8658,8 +8667,8 @@ function renderPlanWeekStrip(){
       + fmtDate(from) + ' → ' + fmtDate(to) + '</span>'
       + '<span class="pw-none">No ' + state.planBuilding
       + ' scaffolds in either report.</span>'
-      + '<span class="pw-cell pw-live"><b>' + fmtMoney(burnToday(state.planBuilding))
-      + '/day</b> right now</span></div>';
+      + '<div class="pw-col pw-live"><div class="pw-head">Rent<span class="pw-sub">right now</span></div>'
+      + '<div class="pw-val"><b>' + fmtMoney(burnToday(state.planBuilding)) + '</b>/day</div></div></div>';
     return;
   }
 
@@ -8678,15 +8687,42 @@ function renderPlanWeekStrip(){
      live figure and a report figure side by side on one line is exactly
      what made these numbers look wrong. */
   const rentNow = burnToday(state.planBuilding);
+
+  /* Laid out in the same columns, with the same names, as the What
+     Changed By Building table on History. Two reasons, and the second
+     matters more than the look:
+
+       - the old single line read "108 standing +7" and never showed the
+         101 it came FROM. You could see the change without ever seeing
+         what changed. Dates on top, both figures underneath.
+       - a person who reads this strip and then opens Week Over Week
+         should meet the same words in the same order. Different names
+         for the same column is how two screens start feeling like two
+         different tools.
+
+     Rent is the one column that is NOT from the reports: it is live,
+     today, the same call the dashboard makes. Labelled so. */
+  const cell = function(head, sub, val, cls){
+    return '<div class="pw-col' + (cls ? ' ' + cls : '') + '">'
+      + '<div class="pw-head">' + head + (sub ? '<span class="pw-sub">' + sub + '</span>' : '') + '</div>'
+      + '<div class="pw-val">' + val + '</div></div>';
+  };
+  const changeWord = b.net === 0 ? '<span class="pw-flat">no change</span>'
+    : '<span class="pw-n ' + (b.net < 0 ? 'good' : 'bad') + '">'
+      + Math.abs(b.net) + (b.net < 0 ? ' fewer' : ' more') + '</span>';
+
   el.style.display = '';
   el.innerHTML = '<div class="pw-strip">'
-    + '<span class="pw-when">' + wkLabel(from) + ' → ' + wkLabel(to) + '</span>'
-    + '<span class="pw-cell"><b>' + b.now + '</b> standing ' + cnt(b.net, true) + '</span>'
-    + '<span class="pw-cell pw-up">' + b.added + ' went up</span>'
-    + '<span class="pw-cell pw-down">' + b.removed + ' came down</span>'
-    + '<span class="pw-cell pw-live"><b>' + fmtMoney(rentNow) + '/day</b> right now</span>'
-        + '<button type="button" class="pw-more" onclick="gotoWeekOverWeek()">'
+    + '<div class="pw-bldg">' + state.planBuilding + '</div>'
+    + cell('Standing', wkLabel(from), b.was)
+    + cell('Standing', wkLabel(to),   '<b>' + b.now + '</b>')
+    + cell('Change', '', changeWord)
+    + cell('New Ones Built', 'in this window', b.added)
+    + cell('Taken Down', 'in this window', b.removed)
+    + cell('Rent', 'right now', '<b>' + fmtMoney(rentNow) + '</b>/day', 'pw-live')
+    + '<button type="button" class="pw-more" onclick="gotoWeekOverWeek()">'
     +   'Week Over Week ›</button>'
+    + '</div>';
     + '</div>';
 }
 
