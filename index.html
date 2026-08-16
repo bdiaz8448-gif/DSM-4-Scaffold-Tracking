@@ -797,6 +797,20 @@ tr.stage-live{background:transparent;}
    overflow-x:hidden on the root stops one wide child from making the whole
    page slide sideways; it does not affect the back gesture. */
 html,body{max-width:100%;overflow-x:hidden;}
+/* That clamp HIDES overflow rather than letting you scroll to it, so it is
+   only safe if nothing actually overflows. Measured at 375px it did: the
+   topbar was 840px wide because .brand is one nowrap row holding eight
+   controls -- logo, title, search, bell, owner shortcut, sign in, theme.
+   Clipped, the Sign In button would have been unreachable on a phone.
+   Letting that row wrap brings the page back to 375px with every control
+   inside the viewport. min-width:0 is what finally lets the long subtitle
+   line break: a flex item defaults to min-width:auto, which means "never
+   narrower than my content", so it can never wrap however small the screen. */
+.topbar>*{min-width:0;}
+.brand{min-width:0;flex:1 1 auto;flex-wrap:wrap;row-gap:var(--sp-2);}
+.brand h1,.brand .sub{overflow-wrap:anywhere;}
+.signin-wrap{flex-wrap:wrap;}
+@media (max-width:760px){ .topbar{flex-direction:column;align-items:stretch;} }
 .hscroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
 .table-wrap,.table-scroll,.hscroll{overscroll-behavior-x:contain;}
 /* Ten rows at a time, everywhere a list can grow without bound. */
@@ -2345,7 +2359,7 @@ textarea.mp-note{ display:block; width:100%; max-width:none; min-height:76px;
     </div>
   </div>
 
-  <footer>Scaffold Command — Beta pilot on Building 537, DSM4 · Live shared register · Confidential — Project Aura · <span id="buildMarker">build 2026-08-15-swipe</span></footer>
+  <footer>Scaffold Command — Beta pilot on Building 537, DSM4 · Live shared register · Confidential — Project Aura · <span id="buildMarker">build 2026-08-15-swipe2</span></footer>
 </div>
 
 <div class="modal-backdrop" id="modalBackdrop" onclick="if(event.target===this) closeModal()">
