@@ -1548,6 +1548,22 @@ details.fold > .fold-body{ padding-bottom:16px; }
    .table-scroll already did the right thing and was never wired to them. */
 .table-wrap{ overflow-x:auto; -webkit-overflow-scrolling:touch; }
 @media (max-width:760px){ .table-wrap table{ min-width:640px; } }
+
+/* Column headers that carry a date or a qualifier under the name. */
+.th-sub{ display:block; font-weight:var(--fw-normal); font-size:var(--fs-3xs);
+  color:var(--muted); letter-spacing:0; text-transform:none; margin-top:2px; }
+
+/* The worked example that explains the table under it. */
+.how-read{ margin-bottom:var(--sp-3); line-height:1.6; }
+.how-read .legend{ margin-top:var(--sp-2); font-size:var(--fs-2xs); color:var(--muted); }
+.how-read .sw{ display:inline-block; width:10px; height:10px; border-radius:var(--r-sm);
+  vertical-align:middle; margin-right:4px; }
+.how-read .sw.good{ background:var(--green); }
+.how-read .sw.bad{ background:var(--red); }
+
+/* KPI captions now carry a real sentence, so they need room to breathe. */
+.kpi-grid.kpi-auto .kpi-note{ line-height:1.45; }
+.kpi-grid.kpi-auto .kpi{ padding-bottom:var(--sp-4); }
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
@@ -1880,9 +1896,9 @@ details.fold > .fold-body{ padding-bottom:16px; }
     <details class="card fold" id="fold-wk-bldg" open>
       <summary><h2>What Changed, By Building</h2></summary>
       <div class="fold-body">
-      <p class="fold-sub">Net change is what the count did. Up and Down are the real traffic behind it &mdash; they rarely cancel out.</p>
+      <div id="wkByBuildingHow"></div>
       <div class="table-wrap"><table class="data-table">
-        <thead><tr><th>Building</th><th>Was</th><th>Now</th><th>Net</th><th>Went Up</th><th>Came Down</th></tr></thead>
+        <thead id="wkByBuildingHead"></thead>
         <tbody id="wkByBuilding"></tbody></table></div>
       </div>
     </details>
@@ -5904,36 +5920,127 @@ function renderWeekly(){
          + '<div class="kpi-note">' + sub + '</div></div>';
   };
   const num = function(v){ return String(v); };
-  kpis.innerHTML =
-      delta('Standing', d.standingDelta, num, true,
-            prev.standing + ' \u2192 ' + curr.standing + ' over ' + d.days + ' days')
-    + delta('Rent Per Day', d.burnDelta, fmtMoney, true,
-            fmtMoney(prev.burn) + ' \u2192 ' + fmtMoney(curr.burn))
-    + delta('On Rent', d.onRentDelta, num, true,
-            prev.onRent + ' \u2192 ' + curr.onRent + ' past the free window')
-    + '<div class="kpi"><div class="label">Went Up / Came Down</div><div class="value">'
-      + d.added.length + ' / ' + d.removed.length + '</div>'
-      + '<div class="kpi-note">' + d.stayed.length + ' stayed up throughout</div></div>';
+  const A = wkLabel(d.from), B = wkLabel(d.to);
 
-  /* The insight this whole page exists for. Only say it when it is true. */
+  /* Every card says, in words, what its number means for the site. A bare
+     "-8" next to a bare "+$245.21" told BDiaz nothing -- worse, the two
+     look like they contradict each other until someone explains the free
+     window. */
+  kpis.innerHTML =
+      delta('Scaffolds Standing', d.standingDelta, num, true,
+            Math.abs(d.standingDelta) + (d.standingDelta < 0 ? ' fewer' : ' more')
+            + ' are up now than on ' + A + ' (' + prev.standing + ' then, ' + curr.standing + ' now)')
+    + delta('Rent Per Day', d.burnDelta, fmtMoney, true,
+            'you are paying ' + fmtMoney(Math.abs(d.burnDelta))
+            + (d.burnDelta > 0 ? ' more' : ' less') + ' every day than on ' + A
+            + ' (' + fmtMoney(prev.burn) + ' then, ' + fmtMoney(curr.burn) + ' now)')
+    + delta('Now Charging Rent', d.onRentDelta, num, true,
+            Math.abs(d.onRentDelta) + (d.onRentDelta > 0 ? ' more have' : ' fewer have')
+            + ' used up their ' + STANDING_LIMIT_DAYS + ' free days and started billing ('
+            + prev.onRent + ' then, ' + curr.onRent + ' now)')
+    + '<div class="kpi"><div class="label">Built / Taken Down</div><div class="value">'
+      + d.added.length + ' / ' + d.removed.length + '</div>'
+      + '<div class="kpi-note">' + d.added.length + ' brand new scaffolds went up and '
+      + d.removed.length + ' came down; ' + d.stayed.length + ' never moved</div></div>';
+
+  /* Was this scaffold past its free days at that point in time? */
+  const billingAt = function(snap, tag){
+    const x = (snap.tags || {})[tag];
+    if(!x || !x.e || !x.r) return false;
+    const days = Math.round((new Date(snap.date + 'T00:00:00')
+                           - new Date(x.e + 'T00:00:00')) / 86400000);
+    return days - STANDING_LIMIT_DAYS > 0;
+  };
+
+  /* The insight this whole page exists for. The old wording ASSERTED the
+     reason. Count it instead: how many that came down were still inside
+     their free days (so removing them saved nothing), and how many that
+     stayed crossed day 60 during the window and started charging. Those
+     two numbers ARE the explanation, and they are checkable. */
+  const downFree  = d.removed.filter(function(t){ return !billingAt(prev, t); }).length;
+  const downPaid  = d.removed.length - downFree;
+  const crossed   = d.stayed.filter(function(t){
+    return !billingAt(prev, t) && billingAt(curr, t); }).length;
+
   if(d.standingDelta < 0 && d.burnDelta > 0){
     note.innerHTML = '<div class="notice warn" style="margin-top:12px;">'
-      + '<b>Fewer scaffolds, more rent.</b> The count fell by ' + Math.abs(d.standingDelta)
-      + ' but the daily bill rose ' + fmtMoney(d.burnDelta)
-      + '. The ones that stayed kept ageing past their free window, and that costs more than the ones that came down were saving.</div>';
+      + '<b>Fewer scaffolds, but a bigger bill. Here is why.</b><br>'
+      + 'There are <b>' + Math.abs(d.standingDelta) + ' fewer</b> scaffolds standing than on '
+      + A + ', yet the daily rent went <b>up ' + fmtMoney(d.burnDelta) + '</b>.<br><br>'
+      + 'A scaffold is free for its first <b>' + STANDING_LIMIT_DAYS
+      + ' days</b>. After that it starts charging every day it stays up.<br>'
+      + '&bull; Of the <b>' + d.removed.length + '</b> that came down, <b>' + downFree
+      + '</b> were still inside their free days &mdash; taking those away saved nothing, because they were not costing anything.'
+      + (downPaid ? ' Only <b>' + downPaid + '</b> were actually being billed.' : '')
+      + '<br>&bull; Meanwhile <b>' + crossed + '</b> of the ones that stayed up crossed day '
+      + STANDING_LIMIT_DAYS + ' during this window and started charging.<br><br>'
+      + '<b>The lesson:</b> taking down an old scaffold saves money. Taking down a new one does not. '
+      + 'To cut the bill, go after the ones that have been up longest.</div>';
   } else if(d.standingDelta > 0 && d.burnDelta < 0){
     note.innerHTML = '<div class="notice info" style="margin-top:12px;">'
-      + '<b>More scaffolds, less rent.</b> ' + d.standingDelta + ' more standing but '
-      + fmtMoney(Math.abs(d.burnDelta)) + '/day cheaper — the expensive long-standing ones came down.</div>';
+      + '<b>More scaffolds, and a smaller bill. Here is why.</b><br>'
+      + '<b>' + d.standingDelta + ' more</b> are standing than on ' + A + ', yet the daily rent '
+      + '<b>fell ' + fmtMoney(Math.abs(d.burnDelta)) + '</b>. '
+      + 'The scaffolds that came down were the old expensive ones &mdash; <b>' + downPaid
+      + '</b> of the ' + d.removed.length + ' were past their ' + STANDING_LIMIT_DAYS
+      + ' free days &mdash; and the new ones going up are still inside their free window, '
+      + 'so they cost nothing yet. Worth watching: they will start charging as they age.</div>';
+  } else if(d.standingDelta === 0 && d.burnDelta > 0){
+    note.innerHTML = '<div class="notice warn" style="margin-top:12px;">'
+      + '<b>Same number of scaffolds, bigger bill.</b> The count did not move, but '
+      + fmtMoney(d.burnDelta) + '/day more is going out because <b>' + crossed
+      + '</b> scaffolds crossed their ' + STANDING_LIMIT_DAYS
+      + '-day free window and started charging.</div>';
+  } else {
+    note.innerHTML = '';
   }
+
+  /* The old header read Was / Now / Net / Went Up / Came Down and BDiaz
+     could not make sense of a row: DSM3 showed -20 in green next to 39 in
+     green and 19 in red, and nothing on the page said how those three
+     numbers related. Name the columns after what they are, put the real
+     dates on them, colour only the one column where a direction means
+     something, and walk through an actual row underneath in words. */
+  const headEl = document.getElementById('wkByBuildingHead');
+  if(headEl) headEl.innerHTML =
+      '<tr><th>Building</th>'
+    + '<th>Standing<br><span class="th-sub">' + wkLabel(d.from) + '</span></th>'
+    + '<th>Standing<br><span class="th-sub">' + wkLabel(d.to) + '</span></th>'
+    + '<th>Change</th>'
+    + '<th>New Ones Built<br><span class="th-sub">in this window</span></th>'
+    + '<th>Taken Down<br><span class="th-sub">in this window</span></th></tr>';
 
   byB.innerHTML = d.perBuilding.map(function(b){
     const col = b.net === 0 ? 'var(--muted)' : (b.net < 0 ? 'var(--green)' : 'var(--red)');
-    return '<tr><td><b>' + b.building + '</b></td><td>' + b.was + '</td><td>' + b.now + '</td>'
-      + '<td style="color:' + col + ';font-weight:var(--fw-bold);">' + (b.net > 0 ? '+' : '') + b.net + '</td>'
-      + '<td>' + (b.added   ? '<span style="color:var(--red);">' + b.added + '</span>'   : '0') + '</td>'
-      + '<td>' + (b.removed ? '<span style="color:var(--green);">' + b.removed + '</span>' : '0') + '</td></tr>';
+    const word = b.net === 0 ? 'no change'
+               : (b.net < 0 ? Math.abs(b.net) + ' fewer' : b.net + ' more');
+    return '<tr><td><b>' + b.building + '</b></td>'
+      + '<td>' + b.was + '</td><td>' + b.now + '</td>'
+      + '<td style="color:' + col + ';font-weight:var(--fw-bold);white-space:nowrap;">' + word + '</td>'
+      + '<td>' + b.added + '</td><td>' + b.removed + '</td></tr>';
   }).join('') || '<tr><td colspan="6"><div class="empty">No buildings in either report.</div></td></tr>';
+
+  /* Explain it with a row that is actually on the screen, not a made-up
+     one -- pick the building that moved the most. */
+  const howEl = document.getElementById('wkByBuildingHow');
+  if(howEl){
+    const ex = d.perBuilding.filter(function(b){ return b.net !== 0; })[0] || d.perBuilding[0];
+    howEl.innerHTML = ex
+      ? '<div class="notice info how-read">'
+        + '<b>How to read a row.</b> Take <b>' + ex.building + '</b>. It had <b>' + ex.was
+        + '</b> scaffolds standing on ' + wkLabel(d.from) + ' and <b>' + ex.now + '</b> on '
+        + wkLabel(d.to) + ' &mdash; ' + (ex.net === 0 ? 'no change overall'
+            : '<b>' + Math.abs(ex.net) + (ex.net < 0 ? ' fewer' : ' more') + '</b>') + '. '
+        + 'That total hides the real traffic: <b>' + ex.removed + '</b> came down and <b>'
+        + ex.added + '</b> brand new ones went up. '
+        + ex.removed + ' down minus ' + ex.added + ' up leaves the '
+        + (ex.net === 0 ? 'same number' : Math.abs(ex.net) + (ex.net < 0 ? ' fewer' : ' more'))
+        + '. So a building can look quiet in the Change column and still have had a busy fortnight.'
+        + '<div class="legend"><span class="sw good"></span> green = fewer standing than before, '
+        + 'which means less rent &nbsp; <span class="sw bad"></span> red = more standing, so more rent</div>'
+        + '</div>'
+      : '';
+  }
 
   const listOf = function(tags, src, cls){
     if(!tags.length) return '<div class="empty">None.</div>';
@@ -6003,12 +6110,21 @@ function renderHistory(){
     return '<div class="kpi"><div class="label">' + label + '</div><div class="value">' + val
       + '</div>' + (note ? '<div class="kpi-note">' + note + '</div>' : '') + '</div>';
   };
+  /* Five bare numbers with two-word captions. Anyone who has not lived
+     inside this data cannot tell Ever Built from Closed Out, or why
+     Cancelled is separate. Say what each one counts, in a sentence. */
+  const where = histBldg === 'ALL' ? 'this site' : histBldg;
   document.getElementById('histKpis').innerHTML =
-      kpi('Ever Built', rows.length + standing.length, 'since Oct 2024')
-    + kpi('Closed Out', dismantled, 'taken down')
-    + kpi('Still Standing', standing.length, 'up right now')
-    + kpi('Cancelled', cancelled, 'never erected')
-    + (awaiting ? kpi('Awaiting Erection', awaiting, 'approved, not built') : '');
+      kpi('Ever Built', rows.length + standing.length,
+          'every scaffold put up in ' + where + ' since Oct 2024 &mdash; the ones still up plus the ones already gone')
+    + kpi('Closed Out', dismantled,
+          'built, used, and taken back down &mdash; finished work')
+    + kpi('Still Standing', standing.length,
+          'up in ' + where + ' right now; these are the ones costing rent')
+    + kpi('Cancelled', cancelled,
+          'requested and then called off &mdash; never actually built, never cost anything')
+    + (awaiting ? kpi('Awaiting Erection', awaiting,
+          'approved and waiting on AMECO to build &mdash; work is blocked until they do') : '');
 
   // Built per month -- closed and standing together, so the bar heights
   // show real site activity rather than only what happens to be down.
