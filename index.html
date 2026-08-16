@@ -6000,7 +6000,7 @@ function mpRenderForm(){
   el.innerHTML =
       '<div class="mp-form">'
     + '<label class="lbl">Week ending<input type="date" id="mpWeek" class="input" value="'
-    +   (last ? last.week : todayISO()) + '"></label>'
+    +   (last ? last.week : todayStr()) + '"></label>'
     + '<div class="table-wrap"><table class="data-table"><thead><tr>'
     +   '<th>Role</th><th>How many</th><th>Hours each</th><th>Pay rate $/hr</th></tr></thead><tbody>'
     + MP_ROLES.map(function(r){
@@ -6056,8 +6056,14 @@ function mpSaveWeek(){
   const before = (state.manpower || []).filter(function(x){ return x.week !== wk; });
   const replaced = before.length !== (state.manpower || []).length;
   state.manpower = before.concat([rec]);
-  logAudit(replaced ? 'Manpower week updated' : 'Manpower week added',
-           'Week ending ' + fmtDate(wk) + ' — ' + mpTotals(rec).head + ' people');
+  const wasHead = replaced
+    ? ((state.manpower || []).filter(function(x){ return x.week === wk; })[0]
+        ? mpTotals((state.manpower || []).filter(function(x){ return x.week === wk; })[0]).head
+        : '')
+    : '';
+  audit(replaced ? 'Manpower week updated' : 'Manpower week added',
+        'Week ending ' + fmtDate(wk), 'people on site',
+        wasHead === '' ? '(none)' : String(wasHead), String(mpTotals(rec).head));
   saveState();
   renderManpower();
   toast((replaced ? 'Updated' : 'Saved') + ' week ending ' + fmtDate(wk));
@@ -8432,7 +8438,11 @@ function approvalQueueFor(recs){
 function setApprovalScope(v){ state.approvalScope = v; saveState(); renderCurrent(); }
 /* Cover without a trail is just confusion later. */
 function coveringNote(r){
-  const me = (state.session && state.session.name) || actingName();
+  /* actingName() -- no such function. Every other place in the app reads
+     state.actingName. This threw for anyone covering another approver's
+     queue, which is exactly when you least want a broken screen. Found by
+     the undefined-call scan, not by anyone using it. */
+  const me = (state.session && state.session.name) || state.actingName;
   if(!r.approver || !me || r.approver === me) return '';
   return ' — covering for ' + r.approver;
 }
