@@ -2359,7 +2359,7 @@ textarea.mp-note{ display:block; width:100%; max-width:none; min-height:76px;
     </div>
   </div>
 
-  <footer>Scaffold Command — Beta pilot on Building 537, DSM4 · Live shared register · Confidential — Project Aura · <span id="buildMarker">build 2026-08-17-report</span></footer>
+  <footer>Scaffold Command — Beta pilot on Building 537, DSM4 · Live shared register · Confidential — Project Aura · <span id="buildMarker">build 2026-08-17-overdue</span></footer>
 </div>
 
 <div class="modal-backdrop" id="modalBackdrop" onclick="if(event.target===this) closeModal()">
@@ -2471,7 +2471,14 @@ function rentOnlyNote(){
 }
 function isOverStandingLimit(rec){
   const d = daysStanding(rec);
-  return d != null && d >= STANDING_LIMIT_DAYS && isStanding(rec);
+  /* PAST the limit, not AT it. Day 60 is the last rent-free day -- the
+     money engine bills max(0, days - 60), so a scaffold standing exactly
+     60 days has accrued nothing. Calling it overdue put 3 scaffolds
+     (2376, 2378, 2379, all erected 18 Jun) into the Overdue card that the
+     banner, the tab badge and the 61-90 bucket all left out, and made the
+     card read 127 against 124 everywhere else. Rent starts on day 61, so
+     overdue starts on day 61. */
+  return d != null && d > STANDING_LIMIT_DAYS && isStanding(rec);
 }
 /* Renders the day count so the number itself goes red past the limit --
    a foreman scanning a column of figures should not have to cross-check
@@ -3926,6 +3933,24 @@ function isOverdueAny(rec){
   return isOverdue(rec) || isOverdueForApproval(rec) || isOverStandingLimit(rec);
 }
 
+/* The number on the Overdue card, and the only thing that should ever be
+   counted under that word.
+
+   isOverdueAny() bundles in a request stuck waiting for a GC decision.
+   That is a real problem, but it is a DIFFERENT problem -- a request that
+   nobody has approved is not a scaffold standing too long, it has not been
+   built, it is not on the floor plan and it is costing nothing. Counting
+   the two together gave one number that answered neither question, and it
+   only looked right because there happened to be nothing pending. The
+   moment a request sat unapproved for four days the Overdue card would
+   have silently disagreed with the banner beside it.
+
+   Stuck approvals are still surfaced -- flagged in the approval queue and
+   coloured on their row -- just not added to a scaffold count. */
+function isOverdueScaffold(rec){
+  return isOverdue(rec) || isOverStandingLimit(rec);
+}
+
 // Looks at fully-closed-out history for the same discipline+building combo
 // and warns up front if that pairing typically overruns its planned
 // duration, instead of only ever finding out after the fact.
@@ -4009,7 +4034,7 @@ function buildGcStatusReport(){
   const standing = recs.filter(isStanding);
   const pending = recs.filter(r=>r.lifecycleStatus==='Pending GC Approval' || r.lifecycleStatus==='Modify Requested');
   const ready = recs.filter(r=>r.lifecycleStatus==='Ready to Dismantle - Awaiting Requestor Approval');
-  const overdue = recs.filter(isOverdueAny);
+  const overdue = recs.filter(isOverdueScaffold);
   const dismantled = recs.filter(r=>r.lifecycleStatus==='Dismantled');
   const flags = smartFlags();
   const M = moneyTotals(recs);
@@ -5436,7 +5461,7 @@ function renderTabs(){
   const pb = document.getElementById('publicBanner');
   if(pb) pb.style.display = (currentRoleName()==='Public' && state.currentTab==='request') ? '' : 'none';
   const bar = document.getElementById('tabBar');
-  const overdueCount = state.records.filter(isOverdue).length;
+  const overdueCount = state.records.filter(isOverdueScaffold).length;
   const pendingCount = state.records.filter(r=>r.lifecycleStatus==='Pending GC Approval' || r.lifecycleStatus==='Modify Requested').length;
   const foremanTaskCount = state.records.filter(r=>['Approved - Assigned to Builder','Modify Approved - Assigned to Builder','Dismantle Approved - Assigned to Builder'].includes(r.lifecycleStatus)).length;
   function tabBtn(t){
@@ -7379,7 +7404,7 @@ function renderDashboard(){
   const standing = recs.filter(isStanding);
   const pending = recs.filter(r=>r.lifecycleStatus==='Pending GC Approval' || r.lifecycleStatus==='Modify Requested');
   const ready = recs.filter(r=>r.lifecycleStatus==='Ready to Dismantle - Awaiting Requestor Approval');
-  const overdue = recs.filter(isOverdueAny);
+  const overdue = recs.filter(isOverdueScaffold);
   const dismantled = recs.filter(r=>r.lifecycleStatus==='Dismantled');
 
   // A blunt, hard-to-ignore dollar number for scaffolds sitting overdue on a
@@ -7505,7 +7530,7 @@ function parseAskQuery(qRaw){
   let recs = state.records.slice();
   const filters = [];
 
-  if(/overdue|late|past due/.test(q)){ recs = recs.filter(isOverdueAny); filters.push('overdue'); }
+  if(/overdue|late|past due/.test(q)){ recs = recs.filter(isOverdueScaffold); filters.push('overdue'); }
   if(/pending|waiting.*approval|needs? approval/.test(q)){ recs = recs.filter(r=>r.lifecycleStatus==='Pending GC Approval'||r.lifecycleStatus==='Modify Requested'); filters.push('pending approval'); }
   if(/ready to dismantle|ready.*teardown|awaiting.*dismantle/.test(q)){ recs = recs.filter(r=>r.lifecycleStatus==='Ready to Dismantle - Awaiting Requestor Approval'); filters.push('ready to dismantle'); }
   if(/standing|active|built|currently up/.test(q)){ recs = recs.filter(isStanding); filters.push('standing'); }
@@ -8807,7 +8832,7 @@ function matchesQuickFilter(r, kind){
   if(kind==='standing') return isStanding(r);
   if(kind==='pending') return r.lifecycleStatus==='Pending GC Approval' || r.lifecycleStatus==='Modify Requested';
   if(kind==='ready') return r.lifecycleStatus==='Ready to Dismantle - Awaiting Requestor Approval';
-  if(kind==='overdue') return isOverdueAny(r);
+  if(kind==='overdue') return isOverdueScaffold(r);
   if(kind==='dismantled') return r.lifecycleStatus==='Dismantled';
   return true;
 }
@@ -9302,7 +9327,7 @@ function renderGcView(){
   if(summaryEl){
     const overdueStandingCount = recs.filter(isOverdue).length;
     const overdueApprovalCount = recs.filter(isOverdueForApproval).length;
-    const overdueTotal = recs.filter(isOverdueAny).length;
+    const overdueTotal = recs.filter(isOverdueScaffold).length;
     if(overdueTotal>0){
       summaryEl.style.display = '';
       summaryEl.className = 'notice crit';
@@ -9425,7 +9450,7 @@ function renderAnalytics(){
   const kpis = [
     ['Total Ever Tracked', recs.length, 'total'],
     ['Fully Dismantled', dismantled.length, 'dismantled'],
-    ['Currently Overdue', recs.filter(isOverdueAny).length, 'overdue'],
+    ['Currently Overdue', recs.filter(isOverdueScaffold).length, 'overdue'],
     ['Avg Full Lifecycle', avgLifespan, null],
   ];
   document.getElementById('anKpi').innerHTML = kpis.map(([l,v,kind])=> kind
