@@ -2359,7 +2359,7 @@ textarea.mp-note{ display:block; width:100%; max-width:none; min-height:76px;
     </div>
   </div>
 
-  <footer>Scaffold Command — Beta pilot on Building 537, DSM4 · Live shared register · Confidential — Project Aura · <span id="buildMarker">build 2026-08-17-overdue</span></footer>
+  <footer>Scaffold Command — Beta pilot on Building 537, DSM4 · Live shared register · Confidential — Project Aura · <span id="buildMarker">build 2026-08-17-parts</span></footer>
 </div>
 
 <div class="modal-backdrop" id="modalBackdrop" onclick="if(event.target===this) closeModal()">
@@ -4442,8 +4442,21 @@ function billableDays(rec){
   const free = rentalPolicyFor(rec).freeDays;
   return Math.max(0, d - free);
 }
+/* Rounded to CENTS at the scaffold, before anything adds it up.
+
+   A rate like 49.595/day is not a real amount of money -- you cannot pay
+   half a cent -- and if every building sums full-precision figures and
+   only rounds at the end, the ten building tabs do not add up to the site
+   total. They were out by 2 cents: the tabs summed to $2,891.76/day and
+   Entire Site said $2,891.74. Nobody loses sleep over 2 cents, but someone
+   adding up the tabs to check the site figure finds a difference they
+   cannot explain, and then they stop trusting the big number too.
+
+   One rounded atom per scaffold means every total is a sum of the same
+   cents, so the parts always equal the whole, on every screen. */
+function money2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
 function accruedCost(rec){
-  return effectiveDailyRate(rec) * billableDays(rec);
+  return money2(effectiveDailyRate(rec) * billableDays(rec));
 }
 /* Whether this scaffold is still inside its free window, and how much of
    it is left -- the number that makes a dismantle decision urgent before
@@ -4589,7 +4602,7 @@ function billedLateDays(rec){
 }
 /* What this scaffold costs today. Zero while it is still free. */
 function dailyBurn(rec){
-  return billableDays(rec) > 0 ? effectiveDailyRate(rec) : 0;
+  return billableDays(rec) > 0 ? money2(effectiveDailyRate(rec)) : 0;
 }
 /* THE single source of every money figure in the app. The dashboard
    banner, the aging strip, the bleed card, the emailed status report and
@@ -7479,6 +7492,29 @@ function renderDashboard(){
         return '<div class="notice warn">⚠ <b>'+(r.tag||r.id)+'</b> — requestor '+r.requestor.name+' marked Finished - Ready to Dismantle, but '+active+' still signed in as active. <a href="#" onclick="openDetail(\''+r.id+'\');return false;">View</a></div>';
       }), 'flagged'), 'warn');
 
+    /* IDLE, and the honest version of it.
+
+       This row read "Idle - standing but unused  232" next to Currently
+       Built 233, and $271,930.89 beside it. Every number was correct and
+       the impression was wrong. "Unused" here means "nobody has signed in
+       on the usage log" -- and NOBODY EVER SIGNS IN. Zero scaffolds out of
+       233 have a single usage entry, so the rule flags 99.6% of the site
+       and the money beside it is simply the whole accrued total, not the
+       cost of idleness. A flag that fires on everything points at nothing,
+       and this one pointed at a quarter of a million dollars.
+
+       So: while nothing is being logged, say that instead of pretending to
+       measure it. The moment anyone starts signing in on scaffolds the
+       real list comes back on its own, with no setting to remember. */
+    const usageEverLogged = recs.some(function(r){ return (r.usageLog || []).length > 0; });
+    if(!usageEverLogged && idle.count > 0){
+      html += '<div class="notice warn"><b>Idle time is not being measured.</b> '
+        + 'Nothing has been signed in or out on the usage log, so the app '
+        + 'cannot tell a scaffold in daily use from one nobody has touched '
+        + 'in a month. All ' + idle.count + ' standing scaffolds would be '
+        + 'flagged, which is why the list is hidden. Sign in on a scaffold '
+        + 'and this turns into a real list of the quiet ones.</div>';
+    } else {
     // Standing, in-duration, and untouched -- the expensive quiet case.
     // Sorted by money so the worst offender is the first thing read.
     html += attnSection('secIdle', 'Idle — standing but unused', idle.count,
@@ -7496,6 +7532,7 @@ function renderDashboard(){
           + (i.alsoOverdue ? ' · already overdue' : '')
           + ' <a href="#" onclick="openDetail(\''+r.id+'\');return false;">View</a></div>';
       }), 'idle'), 'crit');
+    }
 
     // Anything blocked on a person for a week or more, with who to call --
     // this is the class of problem that used to be invisible because it sat
