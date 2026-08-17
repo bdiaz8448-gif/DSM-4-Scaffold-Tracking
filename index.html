@@ -2359,7 +2359,7 @@ textarea.mp-note{ display:block; width:100%; max-width:none; min-height:76px;
     </div>
   </div>
 
-  <footer>Scaffold Command — Beta pilot on Building 537, DSM4 · Live shared register · Confidential — Project Aura · <span id="buildMarker">build 2026-08-17-parts</span></footer>
+  <footer>Scaffold Command — Beta pilot on Building 537, DSM4 · Live shared register · Confidential — Project Aura · <span id="buildMarker">build 2026-08-17-evertotal</span></footer>
 </div>
 
 <div class="modal-backdrop" id="modalBackdrop" onclick="if(event.target===this) closeModal()">
@@ -6830,6 +6830,46 @@ let histBldg = 'ALL';
 let _histQuery = '';
 function setHistBldg(b){ histBldg = b; _pagerPage['hist'] = 1; renderHistory(); }
 function histSearchChanged(v){ _histQuery = String(v||'').toLowerCase(); _pagerPage['hist'] = 1; renderHistory(); }
+/* EVERY SCAFFOLD THAT HAS COME DOWN, from both places one can live.
+
+   BDiaz asked where "Total Tracked 271" comes from, because History says
+   1,550 ever built. Both were right about their own half and neither was
+   right about the site:
+
+     records[]      233 standing + 38 that came down in the 17 AUG report
+     SEED.history   1,317 closed out before that
+
+   A scaffold that vanishes from a weekly report gets marked Dismantled
+   INSIDE records[] -- history is shipped with the build and cannot be
+   written to from the browser, so the takedown has nowhere else to go
+   until the next seed is loaded. So for one week each takedown sits in
+   records, counted by the Dashboard and invisible to History. "Total
+   Tracked" for DSM4 read 119 when DSM4 has actually had 451 scaffolds.
+
+   This is the one list of everything closed. It reads BOTH sources and
+   keys by tag, so the week a scaffold is in records-as-dismantled and the
+   week it has moved into history both give exactly one row. Without that
+   de-dupe the totals would jump the moment a corrected history landed. */
+function closedFor(building){
+  const seen = {}, out = [];
+  const wanted = function(b){ return !building || building === 'ALL' || b === building; };
+  (SEED.history || []).forEach(function(h){
+    if(!h.tag || seen[h.tag] || !wanted(h.building)) return;
+    seen[h.tag] = 1; out.push(h);
+  });
+  state.records.forEach(function(r){
+    if(!r.tag || seen[r.tag] || isUpNow(r)) return;
+    if(!wanted(r.building || 'DSM4')) return;
+    seen[r.tag] = 1; out.push(r);
+  });
+  return out;
+}
+/* Everything a building has ever had up: what is standing plus what has
+   come down. This is the number the Dashboard and History must agree on. */
+function everBuiltFor(building){
+  return recordsIn(building).filter(isUpNow).length + closedFor(building).length;
+}
+
 function historyAll(){ return (SEED.history || []); }
 function historyFor(b){
   const all = historyAll();
@@ -7172,10 +7212,17 @@ function renderHistory(){
           + b + '&quot;)">' + b + ' <span style="opacity:.7;">(' + counts[b] + ')</span></button>';
       }).join('');
 
+  /* closedFor() -- not historyFor() -- so a scaffold that came down in the
+     latest weekly report is counted here the same week the Dashboard
+     counts it. Reading only the shipped history left Ever Built 38 short
+     of the truth every time a report was loaded. rows[] stays as the
+     shipped history because the TABLE below needs the archived fields
+     (dismantle date, days stood) that a live record does not carry yet. */
   const rows = historyFor(histBldg);
+  const closed = closedFor(histBldg);
   const standing = standingFor(histBldg);
-  const dismantled = rows.filter(function(h){ return h.outcome === 'Dismantled'; }).length;
   const cancelled = rows.filter(function(h){ return h.outcome === 'Cancelled'; }).length;
+  const dismantled = closed.length - cancelled;
   const awaiting = (SEED.awaitingErection||[]).filter(function(h){
     return histBldg === 'ALL' || h.building === histBldg; }).length;
 
@@ -7198,7 +7245,7 @@ function renderHistory(){
 
   const where = histBldg === 'ALL' ? 'this site' : histBldg;
   document.getElementById('histKpis').innerHTML =
-      kpi('Ever Built', rows.length + standing.length,
+      kpi('Ever Built', everBuiltFor(histBldg),
           'every scaffold put up in ' + where + ' since Oct 2024 &mdash; the ones still up plus the ones already gone')
     + kpi('Closed Out', dismantled,
           'built, used, and taken back down &mdash; finished work')
@@ -7454,12 +7501,16 @@ function renderDashboard(){
   }
 
   const kpis = [
-    ['Total Tracked', recs.length, 'kpi-total', 'total'],
+    /* Everything this building has ever had up -- the same population
+       History calls Ever Built. It used to be recs.length, which is only
+       the live register, so it under-reported DSM4 by 332 scaffolds. */
+    ['Total Tracked', everBuiltFor(dashBldg), 'kpi-total', 'total'],
     ['Currently Built', standing.length, 'kpi-standing', 'standing'],
     ['Pending Approval', pending.length, 'kpi-pending', 'pending'],
     ['Ready to Dismantle', ready.length, 'kpi-ready', 'ready'],
     ['Overdue', overdue.length, 'kpi-overdue', 'overdue'],
-    ['Dismantled to Date', dismantled.length, 'kpi-dismantled', 'dismantled'],
+    /* To DATE means to date, not "since the last report was loaded". */
+    ['Dismantled to Date', closedFor(dashBldg).length, 'kpi-dismantled', 'dismantled'],
   ];
   document.getElementById('kpiGrid').innerHTML = kpis.map(([l,v,cls,kind],i)=>
     '<div class="kpi '+cls+'" style="animation-delay:'+(i*55)+'ms" onclick="goToAllFiltered(\''+kind+'\')" title="Click to see these in All Requests"><div class="label">'+l+'</div><div class="value" data-target="'+v+'">0</div></div>').join('');
