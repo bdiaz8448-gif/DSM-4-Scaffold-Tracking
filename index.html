@@ -2359,7 +2359,7 @@ textarea.mp-note{ display:block; width:100%; max-width:none; min-height:76px;
     </div>
   </div>
 
-  <footer>Scaffold Command — Beta pilot on Building 537, DSM4 · Live shared register · Confidential — Project Aura · <span id="buildMarker">build 2026-08-17-evertotal</span></footer>
+  <footer>Scaffold Command — Beta pilot on Building 537, DSM4 · Live shared register · Confidential — Project Aura · <span id="buildMarker">build 2026-08-17-tabs</span></footer>
 </div>
 
 <div class="modal-backdrop" id="modalBackdrop" onclick="if(event.target===this) closeModal()">
@@ -7195,9 +7195,14 @@ function renderHistory(){
 
   // Building tabs: Entire Site first, then DSM4, DSM3, then the rest by
   // volume -- the same order as the Dashboard so the two read alike.
+  /* Same rule as the Dashboard: the tab shows what the tab leads to, and
+     the headline on this page is Ever Built. Reading history rows alone
+     put "DSM4 (332)" above a card saying 451. */
   const counts = {};
-  all.forEach(function(h){ if(h.building) counts[h.building] = (counts[h.building]||0)+1; });
-  standingFor('ALL').forEach(function(r){ if(r.building && !counts[r.building]) counts[r.building] = 0; });
+  const names = {};
+  all.forEach(function(h){ if(h.building) names[h.building] = 1; });
+  standingFor('ALL').forEach(function(r){ if(r.building) names[r.building] = 1; });
+  Object.keys(names).forEach(function(b){ counts[b] = everBuiltFor(b); });
   const pinned = ['DSM4','DSM3'].filter(function(b){ return b in counts; });
   const rest = Object.keys(counts).filter(function(b){ return pinned.indexOf(b) < 0; })
     .sort(function(a,b){ return counts[b]-counts[a] || a.localeCompare(b); });
@@ -7206,7 +7211,7 @@ function renderHistory(){
   document.getElementById('histBldgTabs').innerHTML =
     '<button class="building-tab' + (histBldg==='ALL'?' active':'')
       + '" onclick="setHistBldg(&quot;ALL&quot;)">Entire Site <span style="opacity:.7;">('
-      + all.length + ')</span></button>'
+      + everBuiltFor('ALL') + ')</span></button>'
     + order.map(function(b){
         return '<button class="building-tab' + (histBldg===b?' active':'') + '" onclick="setHistBldg(&quot;'
           + b + '&quot;)">' + b + ' <span style="opacity:.7;">(' + counts[b] + ')</span></button>';
@@ -7420,11 +7425,25 @@ function goToAgeBucket(key){
 let dashBldg = 'ALL';
 function setDashBldg(b){ dashBldg = b; renderDashboard(); }
 window.setDashBldg = setDashBldg;
+/* The number on a building tab must be the number the tab leads to.
+
+   It was counting the live register while the card underneath had moved to
+   everything ever built, so DSM4 read "119" on the tab and 451 on the card
+   -- the same screen answering the same question twice. A tab is a promise
+   about what you will see when you press it.
+
+   Counting ever-built also brings back three buildings the tab strip had
+   been hiding: DSM2, Warehouse and DPFG have 21 scaffolds between them,
+   all now down. With the tabs counting live work they had nothing to show
+   and no tab; counting the whole record, they belong. */
 function dashBuildingOrder(){
+  const names = {};
+  state.records.forEach(function(r){ if(r.tag && r.building) names[r.building] = 1; });
+  (SEED.history || []).forEach(function(h){ if(h.building) names[h.building] = 1; });
   const counts = {};
-  state.records.forEach(function(r){ if(r.building) counts[r.building] = (counts[r.building]||0)+1; });
+  Object.keys(names).forEach(function(b){ counts[b] = everBuiltFor(b); });
   const pinned = ['DSM4','DSM3'].filter(function(b){ return counts[b]; });
-  const rest = Object.keys(counts).filter(function(b){ return pinned.indexOf(b) < 0; })
+  const rest = Object.keys(counts).filter(function(b){ return pinned.indexOf(b) < 0 && counts[b]; })
     .sort(function(a,b){ return counts[b]-counts[a] || a.localeCompare(b); });
   return {order: pinned.concat(rest), counts: counts};
 }
@@ -7453,7 +7472,7 @@ function renderDashboard(){
   const tabsEl = document.getElementById('dashBldgTabs');
   if(tabsEl){
     tabsEl.innerHTML = '<button class="building-tab'+(dashBldg==='ALL'?' active':'')
-      + '" onclick="setDashBldg(&quot;ALL&quot;)">Entire Site <span style="opacity:.7;">('+state.records.length+')</span></button>'
+      + '" onclick="setDashBldg(&quot;ALL&quot;)">Entire Site <span style="opacity:.7;">('+everBuiltFor('ALL')+')</span></button>'
       + bo.order.map(function(b){
           return '<button class="building-tab'+(dashBldg===b?' active':'')
             + '" onclick="setDashBldg(&quot;'+b+'&quot;)">'+b+' <span style="opacity:.7;">('+bo.counts[b]+')</span></button>';
@@ -7512,8 +7531,21 @@ function renderDashboard(){
     /* To DATE means to date, not "since the last report was loaded". */
     ['Dismantled to Date', closedFor(dashBldg).length, 'kpi-dismantled', 'dismantled'],
   ];
+  /* Say what each number counts. "Total Tracked 451" and "Dismantled to
+     Date 341" are only trustworthy if it is obvious they cover the whole
+     job and not this week -- the same wording History uses, so the two
+     pages describe the same thing in the same words. */
+  const scopeWord = dashBldg === 'ALL' ? 'this site' : dashBldg;
+  const KPI_HINT = {
+    total:      'every scaffold ' + scopeWord + ' has had up since Oct 2024 — still standing plus already gone',
+    standing:   'up right now in ' + scopeWord + '; these are the ones costing rent',
+    pending:    'submitted and waiting on a GC decision',
+    ready:      'the requestor says they are finished with it; waiting to be taken down',
+    overdue:    'standing past its expected down date',
+    dismantled: 'built, used and taken back down in ' + scopeWord + ' since Oct 2024'
+  };
   document.getElementById('kpiGrid').innerHTML = kpis.map(([l,v,cls,kind],i)=>
-    '<div class="kpi '+cls+'" style="animation-delay:'+(i*55)+'ms" onclick="goToAllFiltered(\''+kind+'\')" title="Click to see these in All Requests"><div class="label">'+l+'</div><div class="value" data-target="'+v+'">0</div></div>').join('');
+    '<div class="kpi '+cls+'" style="animation-delay:'+(i*55)+'ms" onclick="goToAllFiltered(\''+kind+'\')" title="' + (KPI_HINT[kind]||'') + ' — click to see them"><div class="label">'+l+'</div><div class="value" data-target="'+v+'">0</div></div>').join('');
   animateKpiNumbers();
 
   renderAging(recs);
