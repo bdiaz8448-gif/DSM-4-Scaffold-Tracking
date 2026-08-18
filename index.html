@@ -2364,7 +2364,7 @@ textarea.mp-note{ display:block; width:100%; max-width:none; min-height:76px;
     </div>
   </div>
 
-  <footer>Scaffold Command — Beta pilot on Building 537, DSM4 · Live shared register · Confidential — Project Aura · <span id="buildMarker">build 2026-08-17-analytics2</span></footer>
+  <footer>Scaffold Command — Beta pilot on Building 537, DSM4 · Live shared register · Confidential — Project Aura · <span id="buildMarker">build 2026-08-17-analytics3</span></footer>
 </div>
 
 <div class="modal-backdrop" id="modalBackdrop" onclick="if(event.target===this) closeModal()">
@@ -4053,7 +4053,11 @@ function buildGcStatusReport(){
   p += 'Pending approval: ' + pending.length + '\n';
   p += 'Ready to dismantle: ' + ready.length + '\n';
   p += 'Overdue: ' + overdue.length + '\n';
-  p += 'Dismantled to date: ' + closedFor('ALL').length + '\n';
+  /* Same rule as the dashboard card: a cancelled request never came down,
+     so it is not a dismantle. The GC report and the screen he read it off
+     have to say the same number. */
+  p += 'Dismantled to date: '
+     + closedFor('ALL').filter(function(x){ return !wasCancelled(x); }).length + '\n';
   if(exposure > 0) p += '\nOverdue rental cost exposure: ' + fmtMoney(exposure) + ' across ' + overdueWithRate.length + ' scaffold(s).\n';
   if(overdue.length){
     p += '\nNeeds attention:\n';
@@ -6871,8 +6875,21 @@ function closedFor(building){
 }
 /* Everything a building has ever had up: what is standing plus what has
    come down. This is the number the Dashboard and History must agree on. */
+function wasCancelled(x){
+  if(!x) return false;
+  /* History rows carry outcome; a live record that gets called off carries
+     lifecycleStatus. Check both, or the rule holds on one screen only. */
+  return x.outcome === 'Cancelled' || x.lifecycleStatus === 'Cancelled';
+}
+/* Scaffolds that actually went up: standing, plus everything that came
+   down. A CANCELLED request was requested and called off -- it was never
+   built, never cost a cent, and counting it under "Ever Built" or
+   "Dismantled to Date" says something that did not happen. History has
+   always shown Cancelled as its own figure; now the built counts leave
+   them out instead of quietly absorbing them. */
 function everBuiltFor(building){
-  return recordsIn(building).filter(isUpNow).length + closedFor(building).length;
+  return recordsIn(building).filter(isUpNow).length
+       + closedFor(building).filter(function(x){ return !wasCancelled(x); }).length;
 }
 
 /* Every scaffold this site has ever had, in ONE shape.
@@ -6888,20 +6905,33 @@ function everBuiltFor(building){
    -- so anything that wants the whole picture has to normalise first.
    That is this. Closed rows win nothing they do not have: no invented rate,
    no invented floor. */
+/* Same population as everBuiltFor(), one row per scaffold instead of a
+   count, so Analytics groups the whole record and still lands on the same
+   total as the Dashboard card and the tab above it. Cancelled requests are
+   left out here too -- they have no builder, no rate and no lifecycle, and
+   including them would put Analytics 2 ahead of every other screen. */
 function everScaffolds(building){
   const out = [], seen = {};
   const wanted = function(b){ return !building || building === 'ALL' || b === building; };
   state.records.forEach(function(r){
-    if(!r.tag || !wanted(r.building)) return;
+    if(!r.tag || !wanted(r.building) || wasCancelled(r)) return;
     seen[r.tag] = 1;
     out.push({ tag:r.tag, building:r.building, floor:r.floor,
                requestor:(r.requestor && r.requestor.name) || null,
-               builder:r.builderCompany || null, discipline:r.discipline || null,
+               /* Same fallback as the closed rows below. The 22 scaffolds
+                  that arrived on the 17 AUG report were created from the
+                  report, which does not name a builder, so they dropped out
+                  of By Builder Company exactly like the closed ones did --
+                  1,566 of 1,588. Fixing one branch and not the other is how
+                  the first version of this still lost rows. */
+               builder:r.builderCompany || builderName() || null,
+               builderAssumed: !r.builderCompany,
+               discipline:r.discipline || null,
                built:r.dateBuilt || null, down:r.dateDismantled || null,
                rate:effectiveDailyRate(r) || 0, live:true });
   });
   (SEED.history || []).forEach(function(h){
-    if(!h.tag || seen[h.tag] || !wanted(h.building)) return;
+    if(!h.tag || seen[h.tag] || !wanted(h.building) || wasCancelled(h)) return;
     seen[h.tag] = 1;
     out.push({ tag:h.tag, building:h.building, floor:h.floor || null,
                requestor:h.requestor || null,
@@ -7275,7 +7305,7 @@ function renderHistory(){
   const rows = historyFor(histBldg);
   const closed = closedFor(histBldg);
   const standing = standingFor(histBldg);
-  const cancelled = rows.filter(function(h){ return h.outcome === 'Cancelled'; }).length;
+  const cancelled = closed.filter(wasCancelled).length;
   const dismantled = closed.length - cancelled;
   const awaiting = (SEED.awaitingErection||[]).filter(function(h){
     return histBldg === 'ALL' || h.building === histBldg; }).length;
@@ -7578,7 +7608,9 @@ function renderDashboard(){
     ['Ready to Dismantle', ready.length, 'kpi-ready', 'ready'],
     ['Overdue', overdue.length, 'kpi-overdue', 'overdue'],
     /* To DATE means to date, not "since the last report was loaded". */
-    ['Dismantled to Date', closedFor(dashBldg).length, 'kpi-dismantled', 'dismantled'],
+    ['Dismantled to Date',
+      closedFor(dashBldg).filter(function(x){ return !wasCancelled(x); }).length,
+      'kpi-dismantled', 'dismantled'],
   ];
   /* Say what each number counts. "Total Tracked 451" and "Dismantled to
      Date 341" are only trustworthy if it is obvious they cover the whole
@@ -9631,11 +9663,11 @@ function renderAnalytics(){
     ['Total Ever Tracked', ever.length, 'total'],
     ['Fully Dismantled', everDown.length, 'dismantled'],
     ['Currently Overdue', recs.filter(isOverdueScaffold).length, 'overdue'],
-    ['Avg Full Lifecycle', avgLifespan, null],
+    ['Average Life', avgLifespan, null],
   ];
   document.getElementById('anKpi').innerHTML = kpis.map(([l,v,kind])=> kind
     ? '<div class="kpi" onclick="goToAllFiltered(\''+kind+'\')" title="Click to see these in All Requests"><div class="label">'+l+'</div><div class="value" style="font-size:22px;">'+v+'</div></div>'
-    : '<div class="kpi kpi-static" title="Average across fully dismantled scaffolds with complete build/dismantle dates"><div class="label">'+l+'</div><div class="value" style="font-size:22px;">'+v+'</div></div>'
+    : '<div class="kpi kpi-static" title="The MEAN across every closed scaffold. History shows the MEDIAN (Typical Life) -- half stood longer, half shorter. They differ because a few very long jobs pull the mean up; both are right and neither is wrong."><div class="label">'+l+'</div><div class="value" style="font-size:22px;">'+v+'</div></div>'
   ).join('');
 
   function tally(keyFn){
