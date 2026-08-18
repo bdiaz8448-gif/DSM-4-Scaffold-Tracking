@@ -2364,7 +2364,7 @@ textarea.mp-note{ display:block; width:100%; max-width:none; min-height:76px;
     </div>
   </div>
 
-  <footer>Scaffold Command — Beta pilot on Building 537, DSM4 · Live shared register · Confidential — Project Aura · <span id="buildMarker">build 2026-08-17-analytics</span></footer>
+  <footer>Scaffold Command — Beta pilot on Building 537, DSM4 · Live shared register · Confidential — Project Aura · <span id="buildMarker">build 2026-08-17-analytics2</span></footer>
 </div>
 
 <div class="modal-backdrop" id="modalBackdrop" onclick="if(event.target===this) closeModal()">
@@ -6904,7 +6904,15 @@ function everScaffolds(building){
     if(!h.tag || seen[h.tag] || !wanted(h.building)) return;
     seen[h.tag] = 1;
     out.push({ tag:h.tag, building:h.building, floor:h.floor || null,
-               requestor:h.requestor || null, builder:h.builderCompany || null,
+               requestor:h.requestor || null,
+               /* Older closed rows came across without a builder recorded.
+                  Dropping them left "By Builder Company" showing 249 of
+                  1,588 -- a chart of the whole job missing 1,339 of it.
+                  One builder has erected every scaffold on this contract,
+                  so an unnamed closed row is theirs; the chart says
+                  underneath how many were attributed, not recorded. */
+               builder:h.builderCompany || builderName() || null,
+               builderAssumed: !h.builderCompany,
                discipline:h.discipline || null, built:h.erect || null,
                down:h.dismantled || null, rate:h.rate || 0, live:false });
   });
@@ -9668,7 +9676,12 @@ function renderAnalytics(){
     return Object.entries(m).sort((a,b)=>b[1]-a[1]).map(function(e){ return [label[e[0]], e[1]]; });
   }
   document.getElementById('anByRequestor').innerHTML = barList(tallyEver(x=>x.requestor), true);
-  document.getElementById('anByBuilder').innerHTML = barList(tallyEver(x=>x.builder));
+  const assumedBuilder = ever.filter(function(x){ return x.builderAssumed; }).length;
+  document.getElementById('anByBuilder').innerHTML = barList(tallyEver(x=>x.builder))
+    + (assumedBuilder ? '<div class="empty" style="text-align:left;padding-top:6px;">'
+        + assumedBuilder + ' closed scaffold' + (assumedBuilder===1?'':'s')
+        + ' came across without a builder recorded and ' + (assumedBuilder===1?'is':'are')
+        + ' counted under ' + builderName() + ', the only builder on this contract.</div>' : '');
   document.getElementById('anByFloor').innerHTML = anBldg==='ALL'
     ? barList(state.buildings.map(b=>[b, everScaffolds(b).length]))
     /* 122 closed rows never recorded a floor, so a floor breakdown would
