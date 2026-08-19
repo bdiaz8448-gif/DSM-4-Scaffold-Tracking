@@ -1028,6 +1028,27 @@ html,body{max-width:100%;overflow-x:hidden;}
 .ask-input{flex:1;font-family:inherit;font-size:var(--fs-sm);padding:var(--sp-2) var(--sp-3);border-radius:var(--r-md);border:1px solid rgba(255,255,255,.4);
   background:rgba(255,255,255,.95);color:#161a2e;}
 .ask-results{margin-top:12px;}
+.plan-unplaced{margin-top:var(--sp-3);}
+.unplaced-recon{font-size:var(--fs-sm);padding:var(--sp-2) var(--sp-3);border-radius:var(--r-md);
+  background:var(--surface-2);border:1px solid var(--line);}
+.unplaced-n{color:var(--warn);}
+.unplaced-why{font-size:var(--fs-xs);color:var(--ink-3);margin:var(--sp-2) 0;line-height:1.5;}
+/* Same containment rule as every other scroller in here: keep the
+   two-finger swipe back working when this list gets long. */
+.unplaced-list{max-height:34vh;overflow-y:auto;overscroll-behavior-y:contain;}
+.unplaced-row{display:grid;grid-template-columns:70px 1fr 2fr auto;gap:var(--sp-2);align-items:center;
+  padding:var(--sp-2) var(--sp-3);margin-bottom:var(--sp-1);border-radius:var(--r-md);
+  background:var(--surface-2);border:1px solid var(--line);cursor:pointer;font-size:var(--fs-sm);
+  transition:background .15s;}
+.unplaced-row:hover{background:var(--surface-3);}
+.unplaced-row.is-overdue{border-color:var(--danger);}
+.unplaced-co{color:var(--ink-2);}
+.unplaced-room{color:var(--ink-3);}
+.unplaced-status{font-size:var(--fs-2xs);color:var(--ink-3);white-space:nowrap;}
+@media (max-width:760px){
+  .unplaced-row{grid-template-columns:60px 1fr;row-gap:var(--sp-1);}
+  .unplaced-room,.unplaced-status{grid-column:1 / -1;}
+}
 .ask-results-header{font-size:var(--fs-2xs);color:rgba(255,255,255,.85);margin-bottom:6px;font-weight:var(--fw-medium);text-transform:uppercase;letter-spacing:.03em;display:flex;align-items:center;justify-content:space-between;gap:var(--sp-2);}
 /* Expanded, the list scrolls inside its own box. Without this a
    400-result answer pushes the rest of the dashboard off screen and
@@ -1839,6 +1860,7 @@ textarea.mp-note{ display:block; width:100%; max-width:none; min-height:76px;
       <div class="floor-tabs" id="floorTabs" style="margin-top:14px;"></div>
       <div id="planWeekStrip" style="display:none;"></div>
       <div class="plan-wrap" id="planWrap"></div>
+      <div id="planUnplaced" class="plan-unplaced"></div>
       <div class="legend">
         <span><i style="background:#8a5a00"></i>Pending GC Approval</span>
         <span><i style="background:#2E5395"></i>Approved / Building</span>
@@ -2370,7 +2392,7 @@ textarea.mp-note{ display:block; width:100%; max-width:none; min-height:76px;
     </div>
   </div>
 
-  <footer>Scaffold Command — Beta pilot on Building 537, DSM4 · Live shared register · Confidential — Project Aura · <span id="buildMarker">build 2026-08-17-ask1</span></footer>
+  <footer>Scaffold Command — Beta pilot on Building 537, DSM4 · Live shared register · Confidential — Project Aura · <span id="buildMarker">build 2026-08-18-plan1</span></footer>
 </div>
 
 <div class="modal-backdrop" id="modalBackdrop" onclick="if(event.target===this) closeModal()">
@@ -8931,7 +8953,14 @@ function renderFloorPlan(){
   const gridCheckbox = document.getElementById('gridToggle');
   if(gridCheckbox) gridCheckbox.checked = !!state.showGrid;
 
-  const recs = visibleRecords().filter(r=>r.building===state.planBuilding && r.floor===state.planFloor && isUpNow(r) && r.pin);
+  /* Every scaffold standing on this floor -- the same population the
+     floor tab above counts. Split into the ones we can honestly put on
+     the drawing and the ones we cannot. */
+  const onFloor = visibleRecords().filter(function(r){
+    return r.building===state.planBuilding && r.floor===state.planFloor && isUpNow(r);
+  });
+  const recs = onFloor.filter(function(r){ return r.pin; });
+  const unplaced = onFloor.filter(function(r){ return !r.pin; });
   let html = '';
   if(hasFloorPlan(state.planBuilding, state.planFloor)){
     html += '<img src="data:image/png;base64,'+IMAGES[state.planBuilding][state.planFloor]+'">';
@@ -8952,6 +8981,55 @@ function renderFloorPlan(){
     html = '<div class="empty">No floor plan has been uploaded for '+state.planBuilding+' yet. Requests for this building are still tracked — see All Requests or GC View for the full list.</div>';
   }
   document.getElementById('planWrap').innerHTML = html;
+  renderUnplaced(onFloor, recs, unplaced);
+}
+/* THE TAB SAID 26 AND THE DRAWING SHOWED 10.
+
+   A pin only appears if the scaffold has x/y coordinates, and those were
+   derived from the column reference on the AMECO report. When the report
+   locates a scaffold in words only -- "Water Room", "Above AHU5",
+   "walkable ceiling / build stair to get to high part" -- there is no
+   column to convert, so it got no pin and simply vanished from the plan.
+   The count above it kept counting it. Sixteen scaffolds standing on
+   DSM4 Ground Floor were invisible on the drawing of DSM4 Ground Floor.
+
+   I am not going to guess the coordinates. A pin dropped in roughly the
+   right area of a SAFETY drawing is worse than no pin: someone walks to
+   where the dot is, the scaffold is not there, and now they trust the
+   drawing less everywhere else. So the unplaced ones get listed in full
+   underneath, with the written location the report actually gave, and
+   the header reconciles out loud: 26 = 20 on the drawing + 6 not placed.
+
+   Nothing is hidden and the number always adds up. */
+function renderUnplaced(onFloor, placed, unplaced){
+  const el = document.getElementById('planUnplaced');
+  if(!el) return;
+  if(!onFloor.length){ el.style.display='none'; el.innerHTML=''; return; }
+  el.style.display = '';
+  let h = '<div class="unplaced-recon">'
+        + '<b>'+onFloor.length+'</b> standing on this floor · '
+        + '<b>'+placed.length+'</b> on the drawing · '
+        + '<b class="'+(unplaced.length?'unplaced-n':'')+'">'+unplaced.length+'</b> not placed'
+        + '</div>';
+  if(unplaced.length){
+    h += '<div class="unplaced-why">The report located these in words only — no column'
+       + ' reference to convert into a pin. Rather than guess a spot on the drawing,'
+       + ' they are listed here with exactly what the report said. Tap one to open it.</div>'
+       + '<div class="unplaced-list">'
+       + unplaced.map(function(r){
+           return '<div class="unplaced-row'+(isOverdueAny(r)?' is-overdue':'')+'"'
+             /* Doubled backslash: this JS lives inside a Python string, so
+                \' is what reaches the browser as ' in the attribute. */
+             + ' onclick="openDetail(\''+r.id+'\')">'
+             + '<b>'+(r.tag||r.id)+'</b>'
+             + '<span class="unplaced-co">'+((r.requestor&&r.requestor.name)||'')+'</span>'
+             + '<span class="unplaced-room">'+(r.room||'no location given')+'</span>'
+             + '<span class="unplaced-status">'+r.lifecycleStatus+'</span>'
+             + '</div>';
+         }).join('')
+       + '</div>';
+  }
+  el.innerHTML = h;
 }
 /* What changed in THIS building between the two weeks the user picked
    on Week Over Week. Standing in front of a floor plan, "12 came down
