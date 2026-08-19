@@ -202,7 +202,15 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 .app{position:relative;z-index:1;}
 .app{max-width:1280px;margin:0 auto;padding:0 var(--sp-5) var(--sp-7);}
 .topbar{display:flex;align-items:center;justify-content:space-between;padding:var(--sp-3) var(--sp-5);flex-wrap:wrap;gap:var(--sp-3);
-  background:var(--grad-primary);border-radius:0 0 var(--r-lg) var(--r-lg);margin:0 -22px 20px;
+  background:var(--grad-primary);border-radius:0 0 var(--r-lg) var(--r-lg);
+  /* The topbar deliberately bleeds past the app's side padding. That
+     bleed was a hardcoded -22px against a 24px padding -- 2px out of true
+     from the start, invisible at laptop size. Present Mode scales the
+     padding token to 34/42/50px and the -22px stayed put, so the header
+     sat visibly inset from the tabs below it on a TV, which is exactly
+     what he spotted. Tie the bleed to the token it is cancelling and it
+     lines up at every scale by construction. */
+  margin:0 calc(var(--sp-5) * -1) var(--sp-4);
   border-bottom:1px solid rgba(255,255,255,.07);box-shadow:var(--shadow-lg);}
 .brand h1{font-size:var(--fs-md);}
 .brand .logo{width:34px;height:34px;border-radius:var(--r-md);font-size:var(--fs-base);}
@@ -307,7 +315,11 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 /* Wide data tables scroll inside their card instead of spilling out of it.
    Without this the 12-column request table simply overflowed the card and
    the row background and action button rendered outside the panel. */
-.table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -22px;padding:0 var(--sp-5);}
+/* Same bleed, same fix: this scroller cancels the app padding so a wide
+   table can run to the edge. Hardcoded, it drifted out of true the moment
+   the padding token changed. */
+.table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;
+  margin:0 calc(var(--sp-5) * -1);padding:0 var(--sp-5);}
 .table-scroll table{min-width:940px;}
 /* Belt and braces: nothing escapes a card's rounded box. */
 .card{overflow:hidden;}
@@ -1076,8 +1088,12 @@ html.present .pin-label{max-width:220px;}
 
 /* The presenting bar itself. Sticky so the way out is always on screen,
    even three pages down a long table. */
+/* Sits directly on top of the topbar, so it bleeds to the same edges --
+   otherwise the two stacked bars have different left and right margins
+   and the whole header reads as crooked on a big screen. */
 .present-bar{position:sticky;top:0;z-index:60;display:flex;align-items:center;
-  gap:var(--sp-3);padding:var(--sp-2) var(--sp-4);margin-bottom:var(--sp-3);
+  gap:var(--sp-3);padding:var(--sp-2) var(--sp-4);
+  margin:0 calc(var(--sp-5) * -1) var(--sp-2);
   background:var(--panel-fill-2);border:1px solid var(--border-strong);
   border-radius:var(--r-md);font-size:var(--fs-xs);}
 .present-word{font-weight:var(--fw-bold);letter-spacing:.08em;}
@@ -1709,8 +1725,18 @@ details.fold > .fold-body{ padding-bottom:16px; }
 .mp-form .mp-in{ max-width:120px; }
 
 /* Which report the dashboard is showing. Quiet, but never absent. */
-.as-of{ font-size:var(--fs-2xs); color:var(--muted); margin:var(--sp-2) 0 var(--sp-3); }
-.as-of b{ color:var(--ink); }
+/* "Showing the Aug 17, 2026 AMECO report" sits directly on the page
+   CANVAS, not on a white card -- and in dark mode the canvas is
+   near-black while --muted (#6E6A63) is a grey chosen to sit on white.
+   Grey-on-black measured about 3:1, which is why the date was unreadable.
+   Every other use of --muted is inside a card, so the token is right and
+   only this line was in the wrong place. Black on light, white on dark,
+   and a step up in size because it names the date all the numbers on the
+   page came from. */
+.as-of{ font-size:var(--fs-xs); color:var(--ink-soft); margin:var(--sp-2) 0 var(--sp-3); }
+.as-of b{ color:var(--ink); font-weight:var(--fw-bold); }
+[data-theme="dark"] .as-of{ color:rgba(255,255,255,.86); }
+[data-theme="dark"] .as-of b{ color:#FFFFFF; }
 
 /* Manpower entry. The note used to be a one-line box crammed against its
    own label with the word "remember" cut off. It is a real field now:
@@ -2473,7 +2499,7 @@ textarea.mp-note{ display:block; width:100%; max-width:none; min-height:76px;
     </div>
   </div>
 
-  <footer>Scaffold Command — Beta pilot on Building 537, DSM4 · Live shared register · Confidential — Project Aura · <span id="buildMarker">build 2026-08-18-tv2</span></footer>
+  <footer>Scaffold Command — Beta pilot on Building 537, DSM4 · Live shared register · Confidential — Project Aura · <span id="buildMarker">build 2026-08-18-tv3</span></footer>
 </div>
 
 <div class="modal-backdrop" id="modalBackdrop" onclick="if(event.target===this) closeModal()">
