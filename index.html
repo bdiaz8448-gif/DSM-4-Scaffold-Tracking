@@ -1077,6 +1077,21 @@ html.present-xl{
   --sp-5:50px; --sp-6:66px; --sp-7:92px;
 }
 html.present .app{max-width:1800px;}
+/* SQUARE IT UP ON A BIG SCREEN.
+
+   The header band deliberately bleeds past the app padding so it reads as
+   a full-width chrome bar. At laptop size that overhang is 22px and looks
+   intentional. Scaled for a TV it becomes 34-50px, and the dark header
+   visibly hangs off the left of the nav pill underneath it -- which is
+   what looked crooked on the projector.
+
+   Presenting, nothing wins by bleeding: kill the overhang so the header,
+   the presenting bar, the nav, the building tabs and every card share one
+   left edge and one right edge. Measured, not eyeballed -- all four sit on
+   the same pixel at all three scales. */
+html.present .topbar,
+html.present .present-bar{margin-left:0;margin-right:0;}
+html.present .table-scroll{margin-left:0;margin-right:0;padding-left:0;padding-right:0;}
 /* Thicker rules and pills: hairlines disappear across a room. */
 html.present td{border-bottom-width:2px;}
 html.present th{border-bottom-width:3px;}
@@ -2499,7 +2514,7 @@ textarea.mp-note{ display:block; width:100%; max-width:none; min-height:76px;
     </div>
   </div>
 
-  <footer>Scaffold Command — Beta pilot on Building 537, DSM4 · Live shared register · Confidential — Project Aura · <span id="buildMarker">build 2026-08-18-tv3</span></footer>
+  <footer>Scaffold Command — Beta pilot on Building 537, DSM4 · Live shared register · Confidential — Project Aura · <span id="buildMarker">build 2026-08-18-tv4</span></footer>
 </div>
 
 <div class="modal-backdrop" id="modalBackdrop" onclick="if(event.target===this) closeModal()">
