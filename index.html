@@ -2515,7 +2515,7 @@ textarea.mp-note{ display:block; width:100%; max-width:none; min-height:76px;
     </div>
   </div>
 
-  <footer>Scaffold Command — Beta pilot on Building 537, DSM4 · Live shared register · Confidential — Project Aura · <span id="buildMarker">build 2026-08-18-hist2</span></footer>
+  <footer>Scaffold Command — Beta pilot on Building 537, DSM4 · Live shared register · Confidential — Project Aura · <span id="buildMarker">build 2026-08-18-hist3</span></footer>
 </div>
 
 <div class="modal-backdrop" id="modalBackdrop" onclick="if(event.target===this) closeModal()">
@@ -12745,8 +12745,24 @@ init();
       return true;
     } catch(e){ return false; }
   }
-  /* Do this before the first paint so a reload never flashes 271. */
-  hydrateHistoryFromCache();
+  /* MY COMMENT SAID "before the first paint". IT WAS NOT.
+
+     This whole block is injected AFTER init() -- line one of this shell
+     runs when the app has already painted. So on a cold load the order
+     was: paint dashes -> hydrate the cache into memory -> repaint NOTHING.
+     The 1,300 rows were sitting in SEED behind a screen full of dashes,
+     and they stayed hidden until the Firestore read landed -- which only
+     starts after auth resolves, and on a slow morning never wins the race
+     at all. That is the screenshot with dashes on every card while signed
+     in: data loaded, screen never told.
+
+     So: hydrate, and if it worked, repaint every screen that reads
+     history, by name -- the same three the network path repaints. */
+  if(hydrateHistoryFromCache()){
+    if(typeof renderHistory === "function"){ try { renderHistory(); } catch(e){} }
+    if(typeof renderAnalytics === "function"){ try { renderAnalytics(); } catch(e){} }
+    safeRenderAll();
+  }
 
   function loadHistory(){
     db.collection("sc_history").get().then(function(q){
