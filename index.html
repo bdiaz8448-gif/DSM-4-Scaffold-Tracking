@@ -2392,7 +2392,7 @@ textarea.mp-note{ display:block; width:100%; max-width:none; min-height:76px;
     </div>
   </div>
 
-  <footer>Scaffold Command — Beta pilot on Building 537, DSM4 · Live shared register · Confidential — Project Aura · <span id="buildMarker">build 2026-08-18-plan1</span></footer>
+  <footer>Scaffold Command — Beta pilot on Building 537, DSM4 · Live shared register · Confidential — Project Aura · <span id="buildMarker">build 2026-08-18-drill1</span></footer>
 </div>
 
 <div class="modal-backdrop" id="modalBackdrop" onclick="if(event.target===this) closeModal()">
@@ -7533,6 +7533,9 @@ function renderAging(recs){
 function goToAgeBucket(key){
   state.ageBucket = key;
   state.quickFilter = null;
+  /* The aging buckets sit under the Dashboard's building tabs and are
+     computed from that building, so they travel with it like the KPIs. */
+  applyListBuilding(dashBldg);
   showTab('all');
   renderAll();
 }
@@ -7634,7 +7637,7 @@ function renderDashboard(){
     exposureBanner.style.display = '';
     exposureBanner.innerHTML = '<div><div class="label">💸 '+scopeName+' — '+M.overdueN+' scaffold'+(M.overdueN===1?'':'s')+' past due date'+(M.lateButFree?' · '+M.lateButFree+' not yet renting':'')+'</div><div class="value">'+fmtMoney(exposure)+'</div>'
       + '<div class="label" style="opacity:.92;">paying rent on '+M.overdueN+' overdue scaffold'+(M.overdueN===1?'':'s')+' · '+fmtMoney(M.burn)+'/day</div></div>'
-      + '<button class="btn btn-outline btn-sm" style="background:rgba(255,255,255,.15);color:white;border-color:rgba(255,255,255,.4);" onclick="goToAllFiltered(\'overdue\')">View Overdue</button>';
+      + '<button class="btn btn-outline btn-sm" style="background:rgba(255,255,255,.15);color:white;border-color:rgba(255,255,255,.4);" onclick="goToAllFiltered(\'overdue\',\''+dashBldg+'\')">View Overdue</button>';
   } else {
     exposureBanner.style.display = 'none';
   }
@@ -7667,7 +7670,7 @@ function renderDashboard(){
     dismantled: 'built, used and taken back down in ' + scopeWord + ' since Oct 2024'
   };
   document.getElementById('kpiGrid').innerHTML = kpis.map(([l,v,cls,kind],i)=>
-    '<div class="kpi '+cls+'" style="animation-delay:'+(i*55)+'ms" onclick="goToAllFiltered(\''+kind+'\')" title="' + (KPI_HINT[kind]||'') + ' — click to see them"><div class="label">'+l+'</div><div class="value" data-target="'+v+'">0</div></div>').join('');
+    '<div class="kpi '+cls+'" style="animation-delay:'+(i*55)+'ms" onclick="goToAllFiltered(\''+kind+'\',\''+dashBldg+'\')" title="' + (KPI_HINT[kind]||'') + ' — click to see them"><div class="label">'+l+'</div><div class="value" data-target="'+v+'">0</div></div>').join('');
   animateKpiNumbers();
 
   renderAging(recs);
@@ -9161,9 +9164,37 @@ const QUICK_FILTER_LABELS = {
   total:'Total Tracked', standing:'Currently Built', pending:'Pending Approval',
   ready:'Ready to Dismantle', overdue:'Overdue', dismantled:'Dismantled to Date',
 };
-function goToAllFiltered(kind){
+/* CARRY THE BUILDING THROUGH THE CLICK.
+
+   Every one of these cards is rendered for a building the user already
+   chose -- DSM4's Currently Built, CUB's 8 -- and clicking it used to set
+   the status filter and drop the building on the floor. You asked to see
+   DSM4's 110 and landed on all 233, sorted so the first page was DSM3.
+   The number you clicked was nowhere on the screen you got.
+
+   The building comes along now. 'ALL' clears it, which is what Entire
+   Site should mean. Callers pass the building THEY are showing --
+   dashBldg on the Dashboard, anBldg on Analytics -- so a card can never
+   filter to a different building than the one above it. */
+function goToAllFiltered(kind, building){
   state.quickFilter = kind==='total' ? null : kind;
+  applyListBuilding(building);
   showTab('all');
+  renderAll();
+}
+/* One place that points the All Requests building dropdown at a building,
+   because three different screens jump here and they must all behave the
+   same. Guards on the element existing so an early call cannot throw. */
+function applyListBuilding(building){
+  const sel = document.getElementById('fltBuilding');
+  if(!sel) return;
+  const want = (!building || building === 'ALL') ? '' : building;
+  /* Only set it if that option actually exists -- otherwise the select
+     silently keeps its old value and the list quietly shows the wrong
+     building, which is the bug we are fixing. */
+  const ok = Array.prototype.some.call(sel.options, function(o){ return o.value === want; });
+  sel.value = ok ? want : '';
+  state.listBuilding = sel.value;
 }
 function clearQuickFilter(){ state.quickFilter=null; saveState(); renderAll(); }
 function clearAgeBucket(){ state.ageBucket=null; saveState(); renderAll(); }
@@ -9206,7 +9237,14 @@ function renderAll(){
   renderNotifBell();
   const chipRow = document.getElementById('quickFilterRow');
   let chips = '';
-  if(state.quickFilter) chips += '<div class="filter-chip">Showing: '+QUICK_FILTER_LABELS[state.quickFilter]+' <button onclick="clearQuickFilter()">✕</button></div>';
+  /* Name the building in the chip. "Showing: Currently Built" over a list
+     of 233 gave no clue which building you had asked for, which is half
+     the reason the old bug went unnoticed -- the screen looked right. */
+  const chipB = (document.getElementById('fltBuilding')||{}).value || '';
+  if(state.quickFilter) chips += '<div class="filter-chip">Showing: '
+    + QUICK_FILTER_LABELS[state.quickFilter]
+    + (chipB ? ' — ' + chipB : ' — entire site')
+    + ' <button onclick="clearQuickFilter()">✕</button></div>';
   if(state.ageBucket){
     const ab = AGE_BUCKETS.filter(function(b){ return b.key===state.ageBucket; })[0];
     if(ab) chips += '<div class="filter-chip">Standing: '+ab.label+' <button onclick="clearAgeBucket()">✕</button></div>';
@@ -9815,7 +9853,7 @@ function renderAnalytics(){
     ['Average Life', avgLifespan, null],
   ];
   document.getElementById('anKpi').innerHTML = kpis.map(([l,v,kind])=> kind
-    ? '<div class="kpi" onclick="goToAllFiltered(\''+kind+'\')" title="Click to see these in All Requests"><div class="label">'+l+'</div><div class="value" style="font-size:22px;">'+v+'</div></div>'
+    ? '<div class="kpi" onclick="goToAllFiltered(\''+kind+'\',\''+anBldg+'\')" title="Click to see these in All Requests"><div class="label">'+l+'</div><div class="value" style="font-size:22px;">'+v+'</div></div>'
     : '<div class="kpi kpi-static" title="The MEAN across every closed scaffold. History shows the MEDIAN (Typical Life) -- half stood longer, half shorter. They differ because a few very long jobs pull the mean up; both are right and neither is wrong."><div class="label">'+l+'</div><div class="value" style="font-size:22px;">'+v+'</div></div>'
   ).join('');
 
