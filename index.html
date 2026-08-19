@@ -1028,6 +1028,11 @@ html,body{max-width:100%;overflow-x:hidden;}
 .ask-input{flex:1;font-family:inherit;font-size:var(--fs-sm);padding:var(--sp-2) var(--sp-3);border-radius:var(--r-md);border:1px solid rgba(255,255,255,.4);
   background:rgba(255,255,255,.95);color:#161a2e;}
 .ask-results{margin-top:12px;}
+/* The totals line is a different KIND of row -- a rule above it and a
+   heavier weight, so nobody mistakes it for a tenth building. */
+.wk-total-row td{border-top:2px solid var(--ink-3);padding-top:var(--sp-3);
+  font-size:var(--fs-sm);background:var(--surface-2);}
+.wk-total-sub{font-size:var(--fs-2xs);color:var(--ink-3);font-weight:var(--fw-regular);}
 .plan-unplaced{margin-top:var(--sp-3);}
 .unplaced-recon{font-size:var(--fs-sm);padding:var(--sp-2) var(--sp-3);border-radius:var(--r-md);
   background:var(--surface-2);border:1px solid var(--line);}
@@ -2000,7 +2005,8 @@ textarea.mp-note{ display:block; width:100%; max-width:none; min-height:76px;
       <div id="wkByBuildingHow"></div>
       <div class="table-wrap"><table class="data-table">
         <thead id="wkByBuildingHead"></thead>
-        <tbody id="wkByBuilding"></tbody></table></div>
+        <tbody id="wkByBuilding"></tbody>
+        <tfoot id="wkByBuildingTotal"></tfoot></table></div>
       </div>
     </details>
 
@@ -2392,7 +2398,7 @@ textarea.mp-note{ display:block; width:100%; max-width:none; min-height:76px;
     </div>
   </div>
 
-  <footer>Scaffold Command — Beta pilot on Building 537, DSM4 · Live shared register · Confidential — Project Aura · <span id="buildMarker">build 2026-08-18-drill1</span></footer>
+  <footer>Scaffold Command — Beta pilot on Building 537, DSM4 · Live shared register · Confidential — Project Aura · <span id="buildMarker">build 2026-08-18-tot1</span></footer>
 </div>
 
 <div class="modal-backdrop" id="modalBackdrop" onclick="if(event.target===this) closeModal()">
@@ -7252,6 +7258,38 @@ function renderWeekly(){
       + '<td style="color:' + col + ';font-weight:var(--fw-bold);white-space:nowrap;">' + word + '</td>'
       + '<td>' + b.added + '</td><td>' + b.removed + '</td></tr>';
   }).join('') || '<tr><td colspan="6"><div class="empty">No buildings in either report.</div></td></tr>';
+
+  /* WHOLE SITE, on the bottom line. Every column above adds up to
+     something worth knowing, and reading nine rows to add them in your
+     head is not the job. 249 standing on the 10th, 233 on the 17th, 22 up
+     and 38 down -- that is the fortnight in one line, and it also proves
+     the rows are complete: if the total ever stops matching the site
+     count, a building has gone missing from this table.
+
+     Summed from the SAME rows the table just drew, never recomputed from
+     the register. A total that is calculated separately is a total that
+     can disagree with the rows above it. */
+  const totEl = document.getElementById('wkByBuildingTotal');
+  if(totEl){
+    if(!d.perBuilding.length){ totEl.innerHTML = ''; }
+    else {
+      const T = d.perBuilding.reduce(function(a, b){
+        a.was += b.was; a.now += b.now; a.added += b.added; a.removed += b.removed;
+        return a;
+      }, { was:0, now:0, added:0, removed:0 });
+      const net = T.now - T.was;
+      const col = net === 0 ? 'var(--muted)' : (net < 0 ? 'var(--green)' : 'var(--red)');
+      const word = net === 0 ? 'no change'
+                 : (net < 0 ? Math.abs(net) + ' fewer' : net + ' more');
+      totEl.innerHTML =
+          '<tr class="wk-total-row"><td><b>All buildings</b>'
+        + '<div class="wk-total-sub">' + d.perBuilding.length + ' buildings</div></td>'
+        + '<td><b>' + T.was + '</b></td><td><b>' + T.now + '</b></td>'
+        + '<td style="color:' + col + ';font-weight:var(--fw-bold);white-space:nowrap;">'
+        + word + '</td>'
+        + '<td><b>' + T.added + '</b></td><td><b>' + T.removed + '</b></td></tr>';
+    }
+  }
 
   /* Explain it with a row that is actually on the screen, not a made-up
      one -- pick the building that moved the most. */
