@@ -1954,7 +1954,8 @@ textarea.mp-note{ display:block; width:100%; max-width:none; min-height:76px;
       </div>
       <div id="askResults" class="ask-results"></div>
     </div>
-    <div class="kpi-grid" id="kpiGrid"></div>
+    <div id="histPending" style="display:none;"></div>
+      <div class="kpi-grid" id="kpiGrid"></div>
     <div class="card aging-card" id="agingCard" style="display:none;"></div>
     <div class="card" id="attnCard"></div>
     <!-- The by-building chart moved into the building tabs above (each tab
@@ -2514,7 +2515,7 @@ textarea.mp-note{ display:block; width:100%; max-width:none; min-height:76px;
     </div>
   </div>
 
-  <footer>Scaffold Command — Beta pilot on Building 537, DSM4 · Live shared register · Confidential — Project Aura · <span id="buildMarker">build 2026-08-18-tv4</span></footer>
+  <footer>Scaffold Command — Beta pilot on Building 537, DSM4 · Live shared register · Confidential — Project Aura · <span id="buildMarker">build 2026-08-18-hist1</span></footer>
 </div>
 
 <div class="modal-backdrop" id="modalBackdrop" onclick="if(event.target===this) closeModal()">
@@ -4198,7 +4199,7 @@ function buildGcStatusReport(){
 
   let p = 'Scaffold Status Report — Building 537 (DSM4)\n';
   p += 'As of ' + fmtDate(todayStr()) + '\n\n';
-  p += 'Total scaffolds ever tracked: ' + everBuiltFor('ALL') + ' (since Oct 2024)\n';
+  p += 'Total scaffolds ever tracked: ' + everNum(everBuiltFor('ALL')) + ' (since Oct 2024)\n';
   p += 'Currently built: ' + standing.length + '\n';
   p += 'Pending approval: ' + pending.length + '\n';
   p += 'Ready to dismantle: ' + ready.length + '\n';
@@ -7042,6 +7043,23 @@ function closedFor(building){
 }
 /* Everything a building has ever had up: what is standing plus what has
    come down. This is the number the Dashboard and History must agree on. */
+/* IS THE CLOSED-OUT HISTORY ACTUALLY HERE?
+
+   Every "ever" figure on this app is standing + closed, and the closed
+   side is ~1,355 rows that the CLOUD build fetches at runtime. Until that
+   lands, the honest answer to "how many has this site ever had up" is
+   "I do not know yet" -- but the arithmetic still returns a number, and
+   that number is 271. It looks like a real answer. It is not.
+
+   This build embeds its history, so it is known from the first frame.
+   The cloud shell sets the flag when the rows arrive (or come back from
+   the local cache). Anything that renders an ever-figure asks first. */
+function historyKnown(){
+  return SEED.historyLoaded !== false;
+}
+/* A dash makes somebody wait a second. A wrong number makes them believe
+   the site has 271 scaffolds and go tell somebody so. */
+function everNum(n){ return historyKnown() ? n : '—'; }
 function wasCancelled(x){
   if(!x) return false;
   /* History rows carry outcome; a live record that gets called off carries
@@ -7480,7 +7498,9 @@ function renderHistory(){
   const names = {};
   all.forEach(function(h){ if(h.building) names[h.building] = 1; });
   standingFor('ALL').forEach(function(r){ if(r.building) names[r.building] = 1; });
-  Object.keys(names).forEach(function(b){ counts[b] = everBuiltFor(b); });
+  /* Same rule per building: a pill saying DSM4 (119) while history is
+     still in flight is a wrong number wearing a confident face. */
+  Object.keys(names).forEach(function(b){ counts[b] = everNum(everBuiltFor(b)); });
   const pinned = ['DSM4','DSM3'].filter(function(b){ return b in counts; });
   const rest = Object.keys(counts).filter(function(b){ return pinned.indexOf(b) < 0; })
     .sort(function(a,b){ return counts[b]-counts[a] || a.localeCompare(b); });
@@ -7489,7 +7509,7 @@ function renderHistory(){
   document.getElementById('histBldgTabs').innerHTML =
     '<button class="building-tab' + (histBldg==='ALL'?' active':'')
       + '" onclick="setHistBldg(&quot;ALL&quot;)">Entire Site <span style="opacity:.7;">('
-      + everBuiltFor('ALL') + ')</span></button>'
+      + everNum(everBuiltFor('ALL')) + ')</span></button>'
     + order.map(function(b){
         return '<button class="building-tab' + (histBldg===b?' active':'') + '" onclick="setHistBldg(&quot;'
           + b + '&quot;)">' + b + ' <span style="opacity:.7;">(' + counts[b] + ')</span></button>';
@@ -7528,9 +7548,9 @@ function renderHistory(){
 
   const where = histBldg === 'ALL' ? 'this site' : histBldg;
   document.getElementById('histKpis').innerHTML =
-      kpi('Ever Built', everBuiltFor(histBldg),
+      kpi('Ever Built', everNum(everBuiltFor(histBldg)),
           'every scaffold put up in ' + where + ' since Oct 2024 &mdash; the ones still up plus the ones already gone')
-    + kpi('Closed Out', dismantled,
+    + kpi('Closed Out', everNum(dismantled),
           'built, used, and taken back down &mdash; finished work')
     /* Was "Still Standing". The contrast with closed-out scaffolds is
        worth making, but it belongs in the caption underneath, not in the
@@ -7645,7 +7665,14 @@ function renderHistory(){
 /* ---------------- DASHBOARD ---------------- */
 function animateKpiNumbers(){
   document.querySelectorAll('.kpi .value[data-target]').forEach(el=>{
-    const target = parseInt(el.getAttribute('data-target'), 10) || 0;
+    const raw = el.getAttribute('data-target');
+    /* A card can legitimately hold a NON-number now: while the closed-out
+       history is still loading, the ever-totals render as an em dash
+       rather than as a confidently wrong 271. Counting up to NaN printed
+       "0", which is a different wrong number -- so leave anything that is
+       not a plain integer exactly as it is. */
+    if(!/^-?\d+$/.test(String(raw || '').trim())){ el.textContent = raw; return; }
+    const target = parseInt(raw, 10) || 0;
     const start = 0;
     const dur = 500;
     const t0 = performance.now();
@@ -7725,7 +7752,9 @@ function dashBuildingOrder(){
   state.records.forEach(function(r){ if(r.tag && r.building) names[r.building] = 1; });
   (SEED.history || []).forEach(function(h){ if(h.building) names[h.building] = 1; });
   const counts = {};
-  Object.keys(names).forEach(function(b){ counts[b] = everBuiltFor(b); });
+  /* Same rule per building: a pill saying DSM4 (119) while history is
+     still in flight is a wrong number wearing a confident face. */
+  Object.keys(names).forEach(function(b){ counts[b] = everNum(everBuiltFor(b)); });
   const pinned = ['DSM4','DSM3'].filter(function(b){ return counts[b]; });
   const rest = Object.keys(counts).filter(function(b){ return pinned.indexOf(b) < 0 && counts[b]; })
     .sort(function(a,b){ return counts[b]-counts[a] || a.localeCompare(b); });
@@ -7756,7 +7785,7 @@ function renderDashboard(){
   const tabsEl = document.getElementById('dashBldgTabs');
   if(tabsEl){
     tabsEl.innerHTML = '<button class="building-tab'+(dashBldg==='ALL'?' active':'')
-      + '" onclick="setDashBldg(&quot;ALL&quot;)">Entire Site <span style="opacity:.7;">('+everBuiltFor('ALL')+')</span></button>'
+      + '" onclick="setDashBldg(&quot;ALL&quot;)">Entire Site <span style="opacity:.7;">('+everNum(everBuiltFor('ALL'))+')</span></button>'
       + bo.order.map(function(b){
           return '<button class="building-tab'+(dashBldg===b?' active':'')
             + '" onclick="setDashBldg(&quot;'+b+'&quot;)">'+b+' <span style="opacity:.7;">('+bo.counts[b]+')</span></button>';
@@ -7807,7 +7836,7 @@ function renderDashboard(){
     /* Everything this building has ever had up -- the same population
        History calls Ever Built. It used to be recs.length, which is only
        the live register, so it under-reported DSM4 by 332 scaffolds. */
-    ['Total Tracked', everBuiltFor(dashBldg), 'kpi-total', 'total'],
+    ['Total Tracked', everNum(everBuiltFor(dashBldg)), 'kpi-total', 'total'],
     /* ONE WORD FOR ONE THING. This card said "Currently Built" while 74
        other labels across the app said "Standing" -- and AMECO's own
        weekly report calls its tab Standing Scaffold. "Built" was the worst
@@ -7822,7 +7851,7 @@ function renderDashboard(){
     ['Overdue', overdue.length, 'kpi-overdue', 'overdue'],
     /* To DATE means to date, not "since the last report was loaded". */
     ['Dismantled to Date',
-      closedFor(dashBldg).filter(function(x){ return !wasCancelled(x); }).length,
+      everNum(closedFor(dashBldg).filter(function(x){ return !wasCancelled(x); }).length),
       'kpi-dismantled', 'dismantled'],
   ];
   /* Say what each number counts. "Total Tracked 451" and "Dismantled to
@@ -7838,6 +7867,20 @@ function renderDashboard(){
     overdue:    'standing past its expected down date',
     dismantled: 'built, used and taken back down in ' + scopeWord + ' since Oct 2024'
   };
+  /* Say it out loud rather than leaving a row of dashes unexplained.
+     This is only ever on screen for the moment between opening the page
+     and the closed-out history arriving -- and after the first successful
+     load it is cached locally, so on this device it should never appear
+     again. */
+  const histPend = document.getElementById('histPending');
+  if(histPend){
+    histPend.style.display = historyKnown() ? 'none' : '';
+    if(!historyKnown()) histPend.innerHTML =
+      '<div class="notice info">Loading the closed-out history — the '
+      + '“ever” totals are held back until it is here, rather than '
+      + 'showing a number that only counts this week’s register. '
+      + 'Standing, Overdue and Ready to Dismantle are correct right now.</div>';
+  }
   document.getElementById('kpiGrid').innerHTML = kpis.map(([l,v,cls,kind],i)=>
     '<div class="kpi '+cls+'" style="animation-delay:'+(i*55)+'ms" onclick="goToAllFiltered(\''+kind+'\',\''+dashBldg+'\')" title="' + (KPI_HINT[kind]||'') + ' — click to see them"><div class="label">'+l+'</div><div class="value" data-target="'+v+'">0</div></div>').join('');
   animateKpiNumbers();
@@ -10146,8 +10189,8 @@ function renderAnalytics(){
   const ever = everScaffolds(anBldg);
   const everDown = ever.filter(function(x){ return x.down; });
   const kpis = [
-    ['Total Ever Tracked', ever.length, 'total'],
-    ['Fully Dismantled', everDown.length, 'dismantled'],
+    ['Total Ever Tracked', everNum(ever.length), 'total'],
+    ['Fully Dismantled', everNum(everDown.length), 'dismantled'],
     ['Currently Overdue', recs.filter(isOverdueScaffold).length, 'overdue'],
     ['Average Life', avgLifespan, null],
   ];
@@ -12639,6 +12682,72 @@ init();
      that can go stale. Named on window because the app shell has no
      other way to reach in here. */
   window.scRefreshData = function(){ try { loadHistory(); } catch(e){} };
+
+  /* ==================================================================
+     WHY THE DASHBOARD KEPT SNAPPING BACK TO 271.
+
+     271 is not a stale number and it is not a cache. It is exactly what
+     this page adds up to when it has NO history at all: 233 standing plus
+     the 38 closed rows that happen to live in the live register. Every
+     "ever" figure -- Total Tracked, Dismantled to Date, the building tab
+     counts, Ever Built, Total Ever Tracked -- is standing + closed, and
+     the closed side comes from sc_history.
+
+     sc_history is a ONE-SHOT read of ~1,355 documents. Until it lands,
+     SEED.history is empty and the page honestly reports 271. On a fast
+     connection it is replaced within a second and you never see it. On a
+     slow one, on a refresh, or if the read fails, 271 is what stays on
+     screen -- which is why it looked random and why it came back every
+     time he reloaded.
+
+     Two fixes, and the second matters more than the first:
+
+     1. CACHE IT. Keep the last good history in localStorage so a reload
+        has it instantly instead of starting from zero every single time.
+
+     2. NEVER SHOW A NUMBER WE KNOW IS INCOMPLETE. Even with the cache
+        there is a first load on a new device. Until history is actually
+        known, the ever-totals render as a dash, not as 271. A dash makes
+        somebody wait a second; 271 makes them believe the site has 271
+        scaffolds. He was right: it should not have been an option.
+     ================================================================== */
+  var HIST_CACHE = "sc_history_cache_v1";
+  function cacheHistory(closed, waiting){
+    try {
+      /* Store only the fields the app actually reads. The full documents
+         are far larger and localStorage on this machine is already
+         carrying a megabyte of other apps' data. */
+      var slim = closed.map(function(h){
+        return { tag:h.tag, building:h.building, floor:h.floor,
+                 requestor:h.requestor, builderCompany:h.builderCompany,
+                 discipline:h.discipline, erect:h.erect,
+                 dismantled:h.dismantled, daysStood:h.daysStood,
+                 rate:h.rate, outcome:h.outcome, room:h.room };
+      });
+      localStorage.setItem(HIST_CACHE, JSON.stringify(
+        { v:1, at:Date.now(), closed:slim, waiting:waiting || [] }));
+    } catch(e){
+      /* Quota is the likely failure and it is not fatal -- we just fall
+         back to fetching every load. Do not let it break the render. */
+      console.warn("history cache not saved:", e && e.name);
+    }
+  }
+  function hydrateHistoryFromCache(){
+    try {
+      var raw = localStorage.getItem(HIST_CACHE);
+      if(!raw) return false;
+      var c = JSON.parse(raw);
+      if(!c || !c.closed || !c.closed.length) return false;
+      SEED.history = c.closed;
+      SEED.awaitingErection = c.waiting || [];
+      SEED.historyLoaded = true;
+      SEED.historyFromCache = true;
+      return true;
+    } catch(e){ return false; }
+  }
+  /* Do this before the first paint so a reload never flashes 271. */
+  hydrateHistoryFromCache();
+
   function loadHistory(){
     db.collection("sc_history").get().then(function(q){
       var closed = [], waiting = [];
@@ -12648,6 +12757,9 @@ init();
       });
       SEED.history = closed;
       SEED.awaitingErection = waiting;
+      SEED.historyLoaded = true;
+      SEED.historyFromCache = false;
+      cacheHistory(closed, waiting);
       /* renderAll() paints the dashboard, floor plan and tables but has no
          idea the History view exists, so a plain safeRenderAll() left the
          "not loaded yet" banner on screen even though 1,320 rows had just
@@ -12668,9 +12780,15 @@ init();
       /* This used to swallow the error silently, which is how a missing
          Firestore rule looked identical to "no history exists". Say it. */
       console.error("sc_history load failed:", e && e.code, e && e.message);
-      if(histRetries < 3){
+      /* Keep trying for longer than three quick goes -- a phone coming
+         back onto site wifi can take a while, and the alternative is a
+         dashboard stuck on a dash. */
+      if(histRetries < 8){
         histRetries++;
-        setTimeout(loadHistory, 2000 * histRetries);
+        setTimeout(loadHistory, Math.min(30000, 2000 * histRetries));
+      } else if(!SEED.historyLoaded && typeof toast === "function"){
+        toast("Could not load the scaffold history — totals are hidden "
+              + "rather than shown wrong. Check the connection and reload.", "warn");
       }
     });
   }
