@@ -1033,6 +1033,55 @@ html,body{max-width:100%;overflow-x:hidden;}
 .wk-total-row td{border-top:2px solid var(--border-strong);padding-top:var(--sp-3);
   font-size:var(--fs-sm);background:var(--panel-fill-2);}
 .wk-total-sub{font-size:var(--fs-2xs);color:var(--muted);font-weight:var(--fw-normal);}
+/* ------------------------------------------------------------------
+   PRESENT MODE -- for a TV in the trailer or a projector in a meeting.
+
+   Type sizes are already rem, so one root font-size change scales every
+   label, number and heading at once. Spacing is in px tokens, so those
+   get scaled here too -- otherwise the text grows, the padding does not,
+   and everything looks cramped at exactly the moment it is on a wall in
+   front of the whole job.
+
+   The app column also widens: 1280px is right for a laptop and wastes
+   half a 65" screen. */
+html.present{
+  font-size:140%;
+  --sp-1:6px;  --sp-2:12px; --sp-3:18px; --sp-4:24px;
+  --sp-5:34px; --sp-6:46px; --sp-7:64px;
+}
+html.present-lg{ font-size:170%; }
+html.present-xl{ font-size:200%; }
+html.present .app{max-width:1800px;}
+/* Thicker rules and pills: hairlines disappear across a room. */
+html.present td{border-bottom-width:2px;}
+html.present th{border-bottom-width:3px;}
+html.present .kpi .value{letter-spacing:-.02em;}
+/* The floor-plan pins are absolutely positioned by percentage, so they
+   scale with the drawing on their own -- but the LABELS need to stay
+   readable, and their max-width is in px. */
+html.present .pin-label{max-width:220px;}
+
+/* The presenting bar itself. Sticky so the way out is always on screen,
+   even three pages down a long table. */
+.present-bar{position:sticky;top:0;z-index:60;display:flex;align-items:center;
+  gap:var(--sp-3);padding:var(--sp-2) var(--sp-4);margin-bottom:var(--sp-3);
+  background:var(--panel-fill-2);border:1px solid var(--border-strong);
+  border-radius:var(--r-md);font-size:var(--fs-xs);}
+.present-word{font-weight:var(--fw-bold);letter-spacing:.08em;}
+.present-sub{color:var(--muted);flex:1 1 auto;}
+.present-dot{width:10px;height:10px;border-radius:50%;background:var(--red);
+  animation:presentPulse 2s ease-in-out infinite;flex:0 0 auto;}
+@keyframes presentPulse{0%,100%{opacity:1;}50%{opacity:.35;}}
+/* While presenting, the plumbing goes away: sign-in, role switcher and
+   New Request are for operators, not for an audience. */
+html.present .role-controls,
+html.present .signin-wrap,
+html.present .cmdk-trigger,
+html.present .bell-trigger,
+html.present .owner-shortcut{display:none !important;}
+/* A TV is usually far away and nobody is hovering it. */
+html.present .reqrow:hover{background:transparent;}
+@media print{ .present-bar{display:none !important;} }
 .plan-unplaced{margin-top:var(--sp-3);}
 .unplaced-recon{font-size:var(--fs-sm);padding:var(--sp-2) var(--sp-3);border-radius:var(--r-md);
   background:var(--panel-fill-2);border:1px solid var(--border);}
@@ -1765,6 +1814,17 @@ textarea.mp-note{ display:block; width:100%; max-width:none; min-height:76px;
   <div class="intro-skip">Click anywhere or press Esc to skip</div>
 </div>
 <div class="app">
+  <!-- Only visible while presenting. It has to be obvious how to get OUT:
+       somebody who turns this on in a meeting and cannot turn it off will
+       never turn it on again. -->
+  <div id="presentBar" class="present-bar" style="display:none;">
+    <span class="present-dot"></span>
+    <span class="present-word">PRESENTING</span>
+    <span class="present-sub" id="presentSub"></span>
+    <button class="btn btn-sm" onclick="cyclePresentScale()" id="presentScaleBtn">Size</button>
+    <button class="btn btn-sm" onclick="togglePresentRotate()" id="presentRotateBtn">Auto-rotate</button>
+    <button class="btn btn-sm btn-primary" onclick="exitPresent()">Exit (Esc)</button>
+  </div>
   <div class="topbar">
     <div class="brand">
       <div class="logo">SC</div>
@@ -1788,6 +1848,8 @@ textarea.mp-note{ display:block; width:100%; max-width:none; min-height:76px;
         <button class="btn btn-sm btn-outline" onclick="signOutSession()">Sign Out</button>
       </span>
       <button class="theme-toggle" id="themeToggleBtn" onclick="toggleTheme()" title="Toggle dark mode">🌙</button>
+      <button class="theme-toggle" id="presentBtn" onclick="togglePresent()"
+              title="Present Mode — enlarge everything for a TV or projector (P)">📺</button>
     </div>
     <div class="role-controls">
       <button class="btn-new-request" onclick="startBlankRequest()" title="Start a new scaffold request from anywhere in the app">+ New Request</button>
@@ -2398,7 +2460,7 @@ textarea.mp-note{ display:block; width:100%; max-width:none; min-height:76px;
     </div>
   </div>
 
-  <footer>Scaffold Command — Beta pilot on Building 537, DSM4 · Live shared register · Confidential — Project Aura · <span id="buildMarker">build 2026-08-18-word1</span></footer>
+  <footer>Scaffold Command — Beta pilot on Building 537, DSM4 · Live shared register · Confidential — Project Aura · <span id="buildMarker">build 2026-08-18-tv1</span></footer>
 </div>
 
 <div class="modal-backdrop" id="modalBackdrop" onclick="if(event.target===this) closeModal()">
@@ -5305,6 +5367,10 @@ function wireWeeklyDrop(){
 function init(){
   state = loadState();
   applyTheme();
+  /* Before the intro and before the first paint, so a TV that reboots
+     comes straight back up presenting instead of flashing the laptop
+     layout at the room first. */
+  restorePresent();
   playIntro();
   if(_pinMigrationNotice){
     alert(_pinMigrationNotice + '\n\nGo to GC Area, unlock with the PIN(s) above, then update them under Directory (Admin only).');
@@ -9225,6 +9291,136 @@ const QUICK_FILTER_LABELS = {
    Site should mean. Callers pass the building THEY are showing --
    dashBldg on the Dashboard, anBldg on Analytics -- so a card can never
    filter to a different building than the one above it. */
+/* ==================================================================
+   PRESENT MODE
+
+   Same app, sized for a room. Three scales because "big enough" depends
+   on whether it is a 32" monitor at the end of a table or a projector at
+   the back of a trailer, and nobody can tell you which from here.
+
+   Everything is opt-in and reversible: Esc gets you out from anywhere,
+   the bar always shows the way out, and turning it off restores the
+   exact screen you were on. State is remembered so a dedicated TV comes
+   back up presenting after a power cut, but the reload also re-pulls the
+   data, which is what you want on a screen nobody is sitting at.
+   ================================================================== */
+const PRESENT_SCALES = ['present', 'present-lg', 'present-xl'];
+const PRESENT_SCALE_NAMES = { 'present':'Large', 'present-lg':'Larger', 'present-xl':'Largest' };
+/* Rotate slowly. Faster than this and somebody reading a row loses it
+   mid-sentence, which is worse than not rotating at all. */
+const PRESENT_ROTATE_MS = 30000;
+/* Only the screens worth watching. The wizard, Owner tools and the
+   directories are for doing work, not for showing a room. */
+const PRESENT_ROTATION = ['dashboard', 'floorplan', 'history'];
+/* History only reloads on the cloud build; the local file has its data
+   baked in and nothing to re-pull. */
+const PRESENT_REFRESH_MS = 5 * 60 * 1000;
+let presentRotateTimer = null, presentRefreshTimer = null, presentIdleSince = Date.now();
+
+function presentOn(){ return document.documentElement.classList.contains('present'); }
+function presentScaleClass(){
+  return PRESENT_SCALES.filter(function(c){
+    return document.documentElement.classList.contains(c);
+  }).pop() || 'present';
+}
+function togglePresent(){ presentOn() ? exitPresent() : enterPresent(); }
+function enterPresent(scale){
+  const el = document.documentElement;
+  el.classList.add('present');
+  el.classList.add(scale && PRESENT_SCALES.indexOf(scale) >= 0 ? scale : 'present');
+  state.present = { on:true, scale: presentScaleClass(), rotate: !!(state.present && state.present.rotate) };
+  saveState();
+  syncPresentBar();
+  startPresentTimers();
+  toast('Present Mode on — press Esc to exit', 'success');
+}
+function exitPresent(){
+  const el = document.documentElement;
+  el.classList.remove('present');
+  PRESENT_SCALES.forEach(function(c){ el.classList.remove(c); });
+  state.present = { on:false, scale:'present', rotate:false };
+  saveState();
+  stopPresentTimers();
+  syncPresentBar();
+}
+function cyclePresentScale(){
+  const cur = presentScaleClass();
+  const next = PRESENT_SCALES[(PRESENT_SCALES.indexOf(cur) + 1) % PRESENT_SCALES.length];
+  const el = document.documentElement;
+  PRESENT_SCALES.forEach(function(c){ if(c !== 'present') el.classList.remove(c); });
+  el.classList.add('present');
+  if(next !== 'present') el.classList.add(next);
+  state.present = state.present || {}; state.present.on = true; state.present.scale = next;
+  saveState(); syncPresentBar();
+}
+function togglePresentRotate(){
+  state.present = state.present || { on:true, scale:'present' };
+  state.present.rotate = !state.present.rotate;
+  saveState(); syncPresentBar(); startPresentTimers();
+}
+function syncPresentBar(){
+  const bar = document.getElementById('presentBar');
+  if(bar) bar.style.display = presentOn() ? 'flex' : 'none';
+  const btn = document.getElementById('presentBtn');
+  if(btn) btn.style.opacity = presentOn() ? '1' : '';
+  const rot = document.getElementById('presentRotateBtn');
+  const rotating = !!(state.present && state.present.rotate);
+  if(rot) rot.textContent = rotating ? 'Auto-rotate: on' : 'Auto-rotate: off';
+  const sz = document.getElementById('presentScaleBtn');
+  if(sz) sz.textContent = 'Size: ' + (PRESENT_SCALE_NAMES[presentScaleClass()] || 'Large');
+  const sub = document.getElementById('presentSub');
+  if(sub) sub.textContent = rotating
+    ? 'rotating Dashboard → Floor Plan → History'
+    : 'everything enlarged for the screen';
+}
+/* Any interaction means a person has taken over: stop rotating under
+   their hands, and give them a full cycle before it resumes. */
+function presentTouched(){ presentIdleSince = Date.now(); }
+function startPresentTimers(){
+  stopPresentTimers();
+  if(!presentOn()) return;
+  if(state.present && state.present.rotate){
+    presentRotateTimer = setInterval(function(){
+      if(!presentOn()) return stopPresentTimers();
+      if(Date.now() - presentIdleSince < PRESENT_ROTATE_MS) return;   // hands on
+      if(document.getElementById('modalBackdrop') &&
+         document.getElementById('modalBackdrop').style.display === 'flex') return;
+      const here = PRESENT_ROTATION.indexOf(state.currentTab);
+      const next = PRESENT_ROTATION[(here + 1) % PRESENT_ROTATION.length];
+      showTab(next);
+    }, PRESENT_ROTATE_MS);
+  }
+  presentRefreshTimer = setInterval(function(){
+    if(!presentOn()) return stopPresentTimers();
+    if(Date.now() - presentIdleSince < PRESENT_REFRESH_MS) return;    // somebody is using it
+    /* The cloud build exposes this; the local file has no remote to
+       re-pull from, so this is a no-op there rather than a reload that
+       would throw away an unsaved wizard. */
+    if(typeof window.scRefreshData === 'function'){
+      try { window.scRefreshData(); } catch(e){}
+    }
+  }, PRESENT_REFRESH_MS);
+}
+function stopPresentTimers(){
+  if(presentRotateTimer){ clearInterval(presentRotateTimer); presentRotateTimer = null; }
+  if(presentRefreshTimer){ clearInterval(presentRefreshTimer); presentRefreshTimer = null; }
+}
+function restorePresent(){
+  if(state.present && state.present.on) enterPresent(state.present.scale);
+  else syncPresentBar();
+}
+document.addEventListener('keydown', function(e){
+  const typing = /^(INPUT|TEXTAREA|SELECT)$/.test((e.target && e.target.tagName) || '');
+  if(e.key === 'Escape' && presentOn() && !typing){ exitPresent(); return; }
+  /* Bare P only, and never while typing -- otherwise a PIN or a room
+     name flips the whole screen into TV mode mid-keystroke. */
+  if((e.key === 'p' || e.key === 'P') && !typing && !e.metaKey && !e.ctrlKey && !e.altKey){
+    togglePresent();
+  }
+});
+['click','keydown','wheel','touchstart'].forEach(function(ev){
+  document.addEventListener(ev, presentTouched, { passive:true });
+});
 function goToAllFiltered(kind, building){
   state.quickFilter = kind==='total' ? null : kind;
   applyListBuilding(building);
@@ -12382,6 +12578,13 @@ init();
      access list, never in this file. This build ships with an empty
      SEED.history and fills it here once the reader is known to be allowed. */
   var histRetries = 0;
+  /* Present Mode calls this on a timer when a TV has been sitting
+     unattended, so a screen left on all day does not quietly show
+     yesterday. The live register is already an onSnapshot listener and
+     updates itself; history is a one-shot read, so this is the only part
+     that can go stale. Named on window because the app shell has no
+     other way to reach in here. */
+  window.scRefreshData = function(){ try { loadHistory(); } catch(e){} };
   function loadHistory(){
     db.collection("sc_history").get().then(function(q){
       var closed = [], waiting = [];
