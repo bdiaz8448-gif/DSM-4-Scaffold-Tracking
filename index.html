@@ -2515,7 +2515,7 @@ textarea.mp-note{ display:block; width:100%; max-width:none; min-height:76px;
     </div>
   </div>
 
-  <footer>Scaffold Command — Beta pilot on Building 537, DSM4 · Live shared register · Confidential — Project Aura · <span id="buildMarker">build 2026-08-18-hist3</span></footer>
+  <footer>Scaffold Command — Beta pilot on Building 537, DSM4 · Live shared register · Confidential — Project Aura · <span id="buildMarker">build 2026-08-18-hist4</span></footer>
 </div>
 
 <div class="modal-backdrop" id="modalBackdrop" onclick="if(event.target===this) closeModal()">
@@ -12758,11 +12758,23 @@ init();
 
      So: hydrate, and if it worked, repaint every screen that reads
      history, by name -- the same three the network path repaints. */
-  if(hydrateHistoryFromCache()){
+  /* THE LIST, WRITTEN OUT IN FULL, BECAUSE safeRenderAll() IS NOT IT.
+
+     Proven in the browser tonight: with 1,317 rows loaded and the flag
+     true, renderAll() left the dashboard cards showing dashes -- and
+     calling renderDashboard() by name flipped every one of them to 1586
+     in the same tick. renderAll() does not repaint the dashboard KPI
+     grid; only tab navigation does. So every "history arrived" repaint
+     that leaned on safeRenderAll() was skipping the first screen anyone
+     looks at. History, Analytics AND the Dashboard: all three, by name,
+     any time history changes under the page. */
+  function repaintHistoryScreens(){
     if(typeof renderHistory === "function"){ try { renderHistory(); } catch(e){} }
     if(typeof renderAnalytics === "function"){ try { renderAnalytics(); } catch(e){} }
+    if(typeof renderDashboard === "function"){ try { renderDashboard(); } catch(e){} }
     safeRenderAll();
   }
+  if(hydrateHistoryFromCache()){ repaintHistoryScreens(); }
 
   function loadHistory(){
     db.collection("sc_history").get().then(function(q){
@@ -12781,17 +12793,7 @@ init();
          "not loaded yet" banner on screen even though 1,320 rows had just
          arrived -- you had to leave the tab and come back. Paint History
          itself, then let the rest refresh normally. */
-      if(typeof renderHistory === "function"){ try { renderHistory(); } catch(e){} }
-      /* And Analytics, for exactly the same reason History needed naming.
-         safeRenderAll() does not know that screen exists either, so every
-         "ever" figure on it -- Total Ever Tracked, By Builder Company,
-         By Building/Floor, Average Life -- stayed frozen at whatever the
-         live register alone said at page load: 271. The numbers were never
-         wrong; they were painted before the 1,300-odd closed rows landed
-         and nothing ever painted them again. Any screen that reads history
-         has to be repainted here by name. */
-      if(typeof renderAnalytics === "function"){ try { renderAnalytics(); } catch(e){} }
-      safeRenderAll();
+      repaintHistoryScreens();
     }).catch(function(e){
       /* This used to swallow the error silently, which is how a missing
          Firestore rule looked identical to "no history exists". Say it. */
