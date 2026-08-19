@@ -1049,8 +1049,21 @@ html.present{
   --sp-1:6px;  --sp-2:12px; --sp-3:18px; --sp-4:24px;
   --sp-5:34px; --sp-6:46px; --sp-7:64px;
 }
-html.present-lg{ font-size:170%; }
-html.present-xl{ font-size:200%; }
+/* The bigger scales have to take the spacing up with them. Bumping only
+   the font-size left 26px text sitting in 18px padding at Largest --
+   cramped in exactly the way this whole block exists to prevent, and I
+   only caught it by measuring the real rendered page rather than trusting
+   that the base override covered all three. */
+html.present-lg{
+  font-size:170%;
+  --sp-1:8px;  --sp-2:14px; --sp-3:22px; --sp-4:30px;
+  --sp-5:42px; --sp-6:56px; --sp-7:78px;
+}
+html.present-xl{
+  font-size:200%;
+  --sp-1:10px; --sp-2:16px; --sp-3:26px; --sp-4:36px;
+  --sp-5:50px; --sp-6:66px; --sp-7:92px;
+}
 html.present .app{max-width:1800px;}
 /* Thicker rules and pills: hairlines disappear across a room. */
 html.present td{border-bottom-width:2px;}
@@ -2460,7 +2473,7 @@ textarea.mp-note{ display:block; width:100%; max-width:none; min-height:76px;
     </div>
   </div>
 
-  <footer>Scaffold Command — Beta pilot on Building 537, DSM4 · Live shared register · Confidential — Project Aura · <span id="buildMarker">build 2026-08-18-tv1</span></footer>
+  <footer>Scaffold Command — Beta pilot on Building 537, DSM4 · Live shared register · Confidential — Project Aura · <span id="buildMarker">build 2026-08-18-tv2</span></footer>
 </div>
 
 <div class="modal-backdrop" id="modalBackdrop" onclick="if(event.target===this) closeModal()">
