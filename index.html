@@ -1209,7 +1209,7 @@ html.present .reqrow:hover{background:transparent;}
 .metric-label{
   display:inline-block;color:#141416;font-size:var(--fs-3xs);font-weight:var(--fw-bold);
   text-transform:uppercase;letter-spacing:.09em;line-height:1.35;
-  padding:var(--sp-hair) var(--sp-2);border-radius:var(--r-lg);margin:0 0 var(--sp-2) 0;white-space:nowrap;
+  padding:var(--sp-hair) var(--sp-2);border-radius:var(--r-lg);margin:0 0 var(--sp-2) 0;white-space:nowrap;max-width:100%;
   background:linear-gradient(180deg,#FFFFFF 0%,#ECEAE6 100%);
   border:1px solid rgba(0,0,0,.10);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.95), 0 1px 2px rgba(0,0,0,.28);}
@@ -1255,7 +1255,10 @@ html.present .reqrow:hover{background:transparent;}
 .info-tile .badge{max-width:100%;white-space:normal;text-align:left;
   align-items:flex-start;line-height:1.35;}
 .info-tile .badge::before{margin-top:5px;}
-.info-tile .badge .badge-text{white-space:normal;word-break:break-word;overflow-wrap:anywhere;}
+/* Wrap between WORDS only. anywhere/break-word let a narrow tile shred
+   OVERDUE into OVE-RDU-E letter groups -- unreadable on a phone. A status
+   word that does not fit now stays whole; the badge grows instead. */
+.info-tile .badge .badge-text{white-space:normal;word-break:normal;overflow-wrap:normal;}
 
 /* --- Metric cards: the number is the hero --- */
 .metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:var(--sp-3);margin-top:16px;}
@@ -1351,10 +1354,22 @@ input, select, textarea{background:var(--card);color:var(--ink);}
 .xref-grid{display:flex;gap:var(--sp-2);flex-wrap:wrap;align-items:flex-end;}
 .xref-grid label{display:flex;flex-direction:column;gap:var(--sp-1);flex:1;min-width:132px;
   font-size:var(--fs-xs);color:var(--muted);}
-.xref-grid input{padding:var(--sp-1) var(--sp-2);border-radius:var(--r-sm);
+/* Inputs AND selects: the foreman dropdown shipped as a bare native
+   <select> half the height of its Assign button. One rule for both. */
+.xref-grid input,.xref-grid select{width:100%;min-height:38px;
+  padding:var(--sp-1) var(--sp-2);border-radius:var(--r-sm);
   border:1px solid var(--panel-edge);background:var(--card);color:var(--ink);
   font-family:inherit;font-size:var(--fs-sm);}
 .xref-hint{font-size:var(--fs-xs);color:var(--muted);margin-top:var(--sp-2);}
+
+/* Bare "Choose File" controls looked pasted in from another site. The
+   button part takes the app's button clothes; the filename stays muted. */
+input[type=file]{font-size:var(--fs-xs);color:var(--muted);max-width:100%;}
+input[type=file]::file-selector-button{font-family:inherit;font-size:var(--fs-xs);
+  font-weight:var(--fw-medium);color:var(--ink);cursor:pointer;
+  padding:var(--sp-1) var(--sp-3);margin-right:var(--sp-2);
+  border:1px solid var(--panel-edge);border-radius:var(--r-sm);
+  background:linear-gradient(180deg, var(--panel-fill) 0%, var(--panel-fill-2) 100%);}
 .xref-read{display:flex;gap:var(--sp-4);flex-wrap:wrap;font-size:var(--fs-sm);color:var(--muted);}
 .xref-read b{color:var(--ink);}
 
@@ -1702,6 +1717,21 @@ details.fold > .fold-body{ padding-bottom:16px; }
 }
 @media (max-width:520px){
   .kpi-grid.kpi-auto{ grid-template-columns:repeat(2, 1fr); }
+}
+
+/* ---- The detail sheet on a phone -------------------------------
+   Three cost cards forced into one row clipped their own labels and
+   dollar figures; the modal kept desktop padding and hung past the
+   frame. On a narrow screen everything stacks, label pills may wrap
+   instead of truncating, and the Assign row goes full width. */
+@media (max-width:600px){
+  .modal-backdrop{ padding:var(--sp-3) var(--sp-2); }
+  .modal{ padding:var(--sp-4) var(--sp-3) var(--sp-5); }
+  .metric-grid{ grid-template-columns:1fr; }
+  .cost-grid{ grid-template-columns:1fr; }
+  .tile-label,.cost-grid .field label,.meta-grid div b,.metric-label{ white-space:normal; }
+  .xref-grid label{ min-width:100%; }
+  .xref-grid .btn{ width:100%; }
 }
 
 /* .table-wrap wrapped two of the widest tables in the app -- the closed
