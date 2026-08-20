@@ -2515,7 +2515,7 @@ textarea.mp-note{ display:block; width:100%; max-width:none; min-height:76px;
     </div>
   </div>
 
-  <footer>Scaffold Command — Beta pilot on Building 537, DSM4 · Live shared register · Confidential — Project Aura · <span id="buildMarker">build 2026-08-18-hist4</span></footer>
+  <footer>Scaffold Command — Beta pilot on Building 537, DSM4 · Live shared register · Confidential — Project Aura · <span id="buildMarker">build 2026-08-20-wallboard</span></footer>
 </div>
 
 <div class="modal-backdrop" id="modalBackdrop" onclick="if(event.target===this) closeModal()">
@@ -8879,6 +8879,71 @@ function gridRefFor(building, floor, x, y){
   return 'Between '+[colRange, rowRange].filter(Boolean).join(' & ');
 }
 
+/* The inverse: turn a typed Column / Grid Lines reference back into a
+   spot on the drawing. Accepts the two shapes this register actually
+   uses -- "4 / C" and "Between 3–4 & C" (either side of the & may be a
+   pair, so "Between 12–13 & D–E" also resolves). Returns null rather
+   than guessing when a label is not on this floor's grid: a pin in the
+   wrong bay sends a crew to the wrong bay. */
+function gridXYFor(building, floor, ref){
+  const g = gridDataFor(building, floor);
+  if(!g || !ref) return null;
+  const cols = {}, rows = {};
+  (g.cols||[]).forEach(function(c){ cols[String(c.label).toUpperCase()] = c.x; });
+  (g.rows||[]).forEach(function(r){ rows[String(r.label).toUpperCase()] = r.y; });
+  const s = String(ref).trim().replace(/[–—]/g, '-').replace(/^between\s+/i, '');
+  let colPart, rowPart;
+  if(s.indexOf('&') >= 0){ const p = s.split('&'); colPart = p[0]; rowPart = p[1]; }
+  else if(s.indexOf('/') >= 0){ const p = s.split('/'); colPart = p[0]; rowPart = p[1]; }
+  else return null;
+  function avg(part, table){
+    const labels = part.split('-').map(function(t){ return t.trim().toUpperCase(); }).filter(Boolean);
+    if(!labels.length) return null;
+    let sum = 0;
+    for(let i=0;i<labels.length;i++){
+      if(!(labels[i] in table)) return null;
+      sum += table[labels[i]];
+    }
+    return sum / labels.length;
+  }
+  const x = avg(colPart, cols), y = avg(rowPart, rows);
+  if(x === null || y === null) return null;
+  return { x: Math.round(x*10)/10, y: Math.round(y*10)/10 };
+}
+
+/* Owner-only: revise the Column / Grid Lines on a saved scaffold. The
+   register rows came off AMECO's sheet, and the sheet often says only
+   "Sector 3" -- the meeting-room wall board is where the real spot
+   lives. This lets the Owner carry a board location into the app: the
+   text is saved, the pin follows it when the labels resolve on this
+   floor's grid, and the change is written to the audit trail and the
+   scaffold's own history like every other correction. */
+function saveGridRef(id){
+  const r = findRecord(id);
+  if(!r) return;
+  if(!isCurrentGcOwner()){ toast('Only the Owner can change the Column / Grid Lines'); return; }
+  const el = document.getElementById('gridEdit_'+r.id);
+  const next = el ? el.value.trim() : '';
+  const prev = r.gridRef || '';
+  if(next === prev){ toast('Column / Grid Lines unchanged'); return; }
+  const pt = next ? gridXYFor(r.building, r.floor, next) : null;
+  r.gridRef = next;
+  if(pt) r.pin = pt;
+  audit('Changed Column / Grid Lines', r.id, 'gridRef', prev || '(blank)', next || '(blank)');
+  r.history.push({
+    actor: actorLabel(),
+    event: 'Location updated by Owner',
+    date: todayStr(),
+    note: (prev || '(blank)') + ' → ' + (next || '(blank)')
+      + (pt ? ' — pin moved on the floor plan'
+            : (next ? ' — saved as text; those lines are not on this drawing, so the pin was left alone' : '')),
+  });
+  saveState();
+  toast(pt ? 'Location saved — pin placed at ' + next : 'Location saved', 'success');
+  openDetail(id);
+  renderCurrent();
+}
+
 /* Where on the DRAWING did they click?
 
    The old version measured against .plan-wrap's bounding rect, which is a
@@ -12007,6 +12072,16 @@ function openDetail(id){
     tile('Column / Grid Lines', r.gridRef||'—'),
     tile('Expected Duration', r.expectedDuration||'—'),
   ]);
+  // The Owner may correct the grid reference in place -- the pin follows.
+  if(isCurrentGcOwner()){
+    const gval = (r.gridRef || '').replace(/"/g, '&quot;');
+    html += '<div class="tag-edit-row">'
+      + '<span class="tag-edit-label">Column / Grid Lines</span>'
+      + '<input id="gridEdit_'+r.id+'" class="tag-edit-input" value="'+gval+'" placeholder="e.g. 4 / C or Between 3–4 & C">'
+      + '<button class="btn btn-primary btn-sm" onclick="saveGridRef(\''+r.id+'\')">Save Location</button>'
+      + '<span class="tag-edit-hint">Owner only. Type the column and row exactly as the drawing reads them — <b>"4 / C"</b> or <b>"Between 3–4 & C"</b> — and the floor-plan pin moves to match. Every change is written to the history below.</span>'
+      + '</div>';
+  }
   html += tileGroup('Scaffold Information', [
     tile('Scaffold Number', '<span class="tile-mono">'+(r.tag||'Not yet assigned')+'</span>'),
     tile('Status', statusBadgeHtml(r)),
