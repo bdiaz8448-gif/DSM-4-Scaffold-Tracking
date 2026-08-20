@@ -12985,15 +12985,38 @@ init();
         }
         hchunk();
       }
+      /* MATCH BY TAG, NOT BY DOC ID.
+         The weekly-report upload creates records in the app under its own
+         ids (SC-2594); the seed file carries the same scaffolds under
+         build ids (rep-2594). Writing blindly to doc(r.id) turned one
+         scaffold into two -- 22 twins on the 20 Aug load, +22 on every
+         dashboard number at once. The TAG is the scaffold's identity:
+         each seed row overwrites whichever doc already holds its tag,
+         and any extra docs carrying that same tag are removed in the
+         same batch. A register load can now only converge, never double.
+         Docs whose tags are not in the file are untouched, as ever. */
       function writeRecords(){
         var recs = data.records, done = 0;
+        var tagToIds = {};
+        ((typeof state !== "undefined" && state.records) || []).forEach(function(r){
+          if(!r || !r.tag || !r.id) return;
+          (tagToIds[r.tag] = tagToIds[r.tag] || []).push(r.id);
+        });
         function chunk(){
           if(done >= recs.length){ writeConfig(); return; }
           var batch = db.batch();
-          recs.slice(done, done + 300).forEach(function(r){
-            batch.set(db.collection("sc_records").doc(r.id), r);
+          recs.slice(done, done + 200).forEach(function(r){
+            var ids = (tagToIds[r.tag] || []).slice().sort();
+            var native = ids.filter(function(id){ return id.indexOf("SC-") === 0; });
+            var target = native[0] || ids[0] || r.id;
+            var d = JSON.parse(JSON.stringify(r));
+            d.id = target;
+            batch.set(db.collection("sc_records").doc(target), d);
+            ids.forEach(function(id){
+              if(id !== target) batch.delete(db.collection("sc_records").doc(id));
+            });
           });
-          done += 300;
+          done += 200;
           sm.textContent = "Writing records… " + Math.min(done, recs.length) + " / " + recs.length;
           batch.commit().then(chunk)
             .catch(function(e){ sm.textContent = "Record write failed: " + e.message; sm.className = "cg-msg err"; });
